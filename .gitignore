@@ -1,0 +1,16 @@
+# Output
+plots/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

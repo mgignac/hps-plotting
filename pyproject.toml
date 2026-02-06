@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hpsplot"
+version = "0.1.0"
+description = "Plotting tools for HPS analysis"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "uproot",
+    "awkward",
+    "pyyaml",
+]
+
+[project.scripts]
+hpsplot = "hpsplot.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
