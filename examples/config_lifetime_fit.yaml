@@ -1,0 +1,75 @@
+tree: "preselection"
+output_dir: "plots/lifetime_fit/"
+output_format: "pdf"
+
+aliases:
+  vtx_invM: "vertex./vertex.invM_"
+
+samples:
+  - name: signal_120
+    directory: /sdf/data/hps/physics2021/preselection/v4/ap_signal_smeared/ap120MeV
+    sample_type: signal
+    label: "ap120MeV (0.08)"
+    color: "#34dba3"
+    weight: "weight * 1500.0 * exp(-true_ap.vtx_z_ / (true_ap_betagamma * 0.08)) / (true_ap_betagamma * 0.08)"
+    scale: 1.0
+
+  - name: signal_120_10
+    directory: /sdf/data/hps/physics2021/preselection/v4/ap_signal_smeared/ap120MeV
+    sample_type: signal
+    label: "ap120MeV (0.5)"
+    color: "#db3442"
+    weight: "weight * 1500.0 * exp(-true_ap.vtx_z_ / (true_ap_betagamma * 0.5)) / (true_ap_betagamma * 0.5)"
+    scale: 1.0
+
+  - name: signal_120_50
+    directory: /sdf/data/hps/physics2021/preselection/v4/ap_signal_smeared/ap120MeV
+    sample_type: signal
+    label: "ap120MeV (10)"
+    color: "#dba134"
+    weight: "weight * 1500.0 * exp(-true_ap.vtx_z_ / (true_ap_betagamma * 10.0)) / (true_ap_betagamma * 10.0)"
+    scale: 1.0
+
+regions:
+  - name: loose
+    selection: "vtx_invM > 0.0"
+    label: "Loose"
+
+histograms:
+  - name: true_ap_vtx_z
+    variable: "true_ap.vtx_z_"
+    bins: 120
+    x_min: -5.0
+    x_max: 50.0
+    x_label: "$z_{vtx}^{A'}$ [mm]"
+    log_y: true
+
+plots:
+  - name: lifetime_fit
+    plot_type: stack
+    histograms:
+      - true_ap_vtx_z
+    regions:
+      - loose
+    samples: [signal_120,signal_120_10,signal_120_50]
+    fit:
+      function: exponential
+      sample: [signal_120]
+      x_min: 0.0
+      x_max: 80.0
+      show_params: true
+
+    fit:
+      function: exponential
+      sample: [signal_120_10]
+      x_min: 0.0
+      x_max: 80.0
+      show_params: true
+
+    fit:
+      function: exponential
+      sample: [signal_120_50]
+      x_min: 0.0
+      x_max: 80.0
+      show_params: true
+

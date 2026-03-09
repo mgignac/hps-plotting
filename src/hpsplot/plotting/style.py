@@ -62,7 +62,8 @@ def set_hps_style():
     mpl.rcParams.update(params)
 
 
-def add_hps_label(ax, label="HPS", sublabel="Internal", x=0.05, y=0.95):
+def add_hps_label(ax, label="HPS", sublabel="Internal", x=0.05, y=0.95,
+                  lumi=None, extra_lines=None):
     """Add the HPS experiment label to a plot axis.
 
     Parameters
@@ -74,6 +75,13 @@ def add_hps_label(ax, label="HPS", sublabel="Internal", x=0.05, y=0.95):
         Sublabel (italic).
     x, y : float
         Position in axes coordinates.
+    lumi : float, optional
+        Integrated luminosity in pb^{-1}.  When provided, a line
+        showing ``L_int = XX pb^{-1}`` (2 significant figures) is drawn
+        below the main label.
+    extra_lines : list of str, optional
+        Additional text lines rendered below the lumi line (or the main
+        label when lumi is None), e.g. a selection or hit-category label.
     """
     ax.text(
         x, y,
@@ -82,3 +90,22 @@ def add_hps_label(ax, label="HPS", sublabel="Internal", x=0.05, y=0.95):
         fontsize=16,
         verticalalignment="top",
     )
+    y_cursor = y - 0.07
+    if lumi is not None:
+        ax.text(
+            x, y_cursor,
+            f"$L_\\mathrm{{int}} = {lumi:.2g}\\,\\mathrm{{pb}}^{{-1}}$",
+            transform=ax.transAxes,
+            fontsize=13,
+            verticalalignment="top",
+        )
+        y_cursor -= 0.07
+    for line in (extra_lines or []):
+        ax.text(
+            x, y_cursor,
+            line,
+            transform=ax.transAxes,
+            fontsize=13,
+            verticalalignment="top",
+        )
+        y_cursor -= 0.07

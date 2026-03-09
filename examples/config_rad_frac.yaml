@@ -57,15 +57,15 @@ samples:
     scale: 1.0
     lumi_scale: true 
 
-#  - name: wab
-#    directory: /sdf/data/hps/physics2021/preselection/v2/wab_smeared
-#    sample_type: background
-#    rad_frac_role: "denominator"
-#    label: "WAB"
-#    color: "#3498db"
-#    weight: "weight"
-#    scale: 1.0
-#    lumi_scale: true
+  - name: wab
+    directory: /sdf/data/hps/physics2021/preselection/v2/wab_smeared
+    sample_type: background
+    rad_frac_role: "denominator"
+    label: "WAB"
+    color: "#3498db"
+    weight: "weight"
+    scale: 1.0
+    lumi_scale: true
 
 regions:
   - name: loose
@@ -316,4 +316,4 @@ plots:
       - min_y0
     regions: [loose]
     ratio_y_min: 0.0
-    ratio_y_max: 1.0
+    ratio_y_max: 0.2

@@ -1,0 +1,65 @@
+tree: "preselection"
+output_dir: "plots/abcd_miny0/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+
+aliases:
+  vertex_mass: "vertex./vertex.invM_"
+  vertex_z:    "vertex./vertex.pos_.fZ"
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v5/data
+    sample_type: data
+    label: "Data (2021)"
+    color: "black"
+
+# Hit-layer scenarios become regions.
+# Negation is expressed as == 0 (no tilde/exclamation operators).
+regions:
+  - name: L1L1
+    selection: "eleL1 & posL1 & eleL2 & posL2"
+    label: "L1L1"
+
+  - name: L2L2
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2"
+    label: "L2L2"
+
+  - name: L3L3
+    selection: "(eleL1 == 0) & (posL1 == 0) & (eleL2 == 0) & (posL2 == 0) & eleL3 & posL3"
+    label: "L3L3"
+
+  - name: L1L2
+    # One track hits L1, the other hits L2 (but not L1) — symmetric OR
+    selection: "(eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)"
+    label: "L1L2"
+
+  - name: L2L3
+    # One track hits L2 (no L1), the other hits L3 (no L1, no L2) — symmetric OR
+    selection: "((eleL1 == 0) & eleL2 & (posL1 == 0) & (posL2 == 0) & posL3) | ((posL1 == 0) & posL2 & (eleL1 == 0) & (eleL2 == 0) & eleL3)"
+    label: "L2L3"
+
+plots:
+  - name: abcd
+    plot_type: abcd
+    samples: [data]
+    regions: [L1L1, L1L2, L2L2, L2L3, L3L3]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      # Mass scan: 30 – 200 MeV in 5 MeV steps
+      mass_scan_min:  0.03
+      mass_scan_max:  0.20
+      mass_scan_step: 0.003
+      # Signal mass window: center ± 5 MeV
+      mass_window_half_width: 0.005
+      # Sidebands: 2 MeV gap then 10 MeV wide on each side
+      sideband_gap:   0.002
+      sideband_width: 0.010
+      # Z regions [mm]
+      z_signal_min:  0.2
+      z_signal_max: 100.0
+      z_control_min:  0.0
+      z_control_max:  0.2
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true

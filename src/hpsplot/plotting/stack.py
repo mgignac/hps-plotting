@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 
+from .fit import fit_histogram
 from .style import add_hps_label
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ def plot_stack(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_dir,
         bg_contents.append(hdata.bin_contents.copy())
         bg_errors.append(hdata.bin_errors.copy())
         bg_colors.append(samples_map[s_name].color)
-        bg_labels.append(samples_map[s_name].label)
+        bg_labels.append(f"{samples_map[s_name].label} ({hdata.integral:.0f})")
         bin_edges = hdata.bin_edges
 
     if bin_edges is None:
@@ -157,16 +158,17 @@ def plot_stack(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_dir,
         if hdata is None:
             continue
         contents = hdata.bin_contents
-        sig_label = samples_map[s_name].label
+        sig_yield = np.sum(contents)
+        sig_label = f"{samples_map[s_name].label} ({sig_yield:.0f})"
 
-        if plot_cfg.normalize_to_data and has_data and s_name in plot_cfg.signal_fractions:
+        if has_data and s_name in plot_cfg.signal_fractions:
             data_yield = np.sum(region_results[data_name][hist_name].bin_contents)
             frac = plot_cfg.signal_fractions[s_name]
             current = np.sum(contents)
             if current > 0:
                 scale = (data_yield * frac) / current
                 contents = contents * scale
-                sig_label = f"{sig_label} (x{scale:.1f})"
+                sig_label = f"{samples_map[s_name].label} (x{scale:.1f})"
 
         ax_main.step(
             bin_centers, contents,
@@ -180,13 +182,14 @@ def plot_stack(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_dir,
     # Plot data points
     if has_data:
         data_hist = region_results[data_name][hist_name]
+        data_label = f"{samples_map[data_name].label} ({data_hist.integral:.0f})"
         ax_main.errorbar(
             bin_centers,
             data_hist.bin_contents,
             yerr=data_hist.bin_errors,
             fmt="o",
             color=samples_map[data_name].color,
-            label=samples_map[data_name].label,
+            label=data_label,
             markersize=4,
             linewidth=1.2,
             zorder=5,
@@ -194,12 +197,70 @@ def plot_stack(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_dir,
 
     # Main panel formatting
     ax_main.set_ylabel(hist_cfg.y_label if hist_cfg.y_label else "Events")
+
+    # Compute y_max from the actually plotted contents (after scaling)
+    all_maxes = []
+    if mc_total is not None:
+        all_maxes.append(np.max(mc_total))
+    if has_data:
+        data_hist_tmp = region_results[data_name][hist_name]
+        all_maxes.append(np.max(data_hist_tmp.bin_contents + data_hist_tmp.bin_errors))
+
     if hist_cfg.log_y:
         ax_main.set_yscale("log")
         ax_main.set_ylim(bottom=0.1)
+        if all_maxes:
+            ax_main.set_ylim(top=max(all_maxes) * 10)
     else:
         ax_main.set_ylim(bottom=0)
-    ax_main.legend(loc="upper right")
+        if all_maxes:
+            ax_main.set_ylim(top=max(all_maxes) * 1.4)
+    # Reorder legend: data first, then backgrounds, MC unc., then signals
+    handles, labels = ax_main.get_legend_handles_labels()
+    if has_data and labels:
+        # Data is the last plotted item — move it to the front
+        order = list(range(len(handles)))
+        # Find the data entry (last errorbar added)
+        data_idx = next((i for i, l in enumerate(labels) if l.startswith(samples_map[data_name].label)), None)
+        if data_idx is not None:
+            order.remove(data_idx)
+            order.insert(0, data_idx)
+        handles = [handles[i] for i in order]
+        labels = [labels[i] for i in order]
+    # Fit overlay
+    if plot_cfg.fit is not None:
+        fit_cfg = plot_cfg.fit
+        fit_samples = fit_cfg.samples if fit_cfg.samples else [plot_cfg.samples[0]]
+        all_fit_lines = []
+        for fit_sample in fit_samples:
+            hdata = region_results.get(fit_sample, {}).get(hist_name)
+            if hdata is None:
+                continue
+            result = fit_histogram(hdata, fit_cfg, hist_cfg)
+            if result is None:
+                continue
+            popt, pcov, x_curve, y_curve, param_labels = result
+            perr = np.sqrt(np.diag(pcov))
+            s_cfg = samples_map.get(fit_sample)
+            fit_color = s_cfg.color if s_cfg else fit_cfg.color
+            fit_label = f"Fit ({s_cfg.label})" if s_cfg else f"Fit ({fit_sample})"
+            ax_main.plot(x_curve, y_curve, color=fit_color, linewidth=2,
+                         linestyle="--", label=fit_label)
+            if fit_cfg.show_params:
+                header = s_cfg.label if s_cfg else fit_sample
+                lines = [f"\\bf{{{header}}}"]
+                for name, val, err in zip(param_labels, popt, perr):
+                    lines.append(f"${name} = {val:.3g} \\pm {err:.2g}$")
+                all_fit_lines.append("\n".join(lines))
+        if all_fit_lines:
+            ax_main.text(0.95, 0.55, "\n\n".join(all_fit_lines),
+                         transform=ax_main.transAxes, fontsize=10,
+                         verticalalignment="top", horizontalalignment="right",
+                         bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
+        # Re-fetch handles/labels to include fit curves
+        handles, labels = ax_main.get_legend_handles_labels()
+
+    ax_main.legend(handles, labels, loc="upper right")
     add_hps_label(ax_main)
 
     if has_ratio:

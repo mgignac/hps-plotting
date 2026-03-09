@@ -56,25 +56,54 @@ def parse_lumi_file(lumi_path):
     return run_lumi
 
 
-def compute_luminosity(data_dir, lumi_file):
+def _extract_runs_from_path(data_dir):
+    """Extract unique run numbers from ROOT filenames in a path.
+
+    Handles directories, single .root files, and glob patterns (with ``*``).
+    """
+    import glob as globmod
+
+    runs = set()
+    data_dir = str(data_dir)
+
+    if "*" in data_dir:
+        # User-supplied glob pattern
+        for fpath in globmod.glob(data_dir):
+            m = _RUN_RE.search(Path(fpath).name)
+            if m:
+                runs.add(int(m.group(1)))
+    else:
+        p = Path(data_dir)
+        if p.suffix == ".root":
+            m = _RUN_RE.search(p.name)
+            if m:
+                runs.add(int(m.group(1)))
+        else:
+            for root_file in sorted(p.glob("*.root")):
+                m = _RUN_RE.search(root_file.name)
+                if m:
+                    runs.add(int(m.group(1)))
+    return runs
+
+
+def compute_luminosity(directories, lumi_file):
     """Compute total luminosity by matching data files to a run-lumi table.
 
-    Scans ROOT files in *data_dir*, extracts run numbers from their filenames,
-    then sums the corresponding luminosities from *lumi_file*.
+    Scans ROOT files in *directories*, extracts run numbers from their
+    filenames, then sums the corresponding luminosities from *lumi_file*.
 
     Parameters
     ----------
-    data_dir : str or Path
-        Directory containing data ROOT files.
+    directories : list of str
+        Directories (or file paths / glob patterns) containing data ROOT files.
     lumi_file : str or Path
         Path to the run-by-run luminosity text file.
 
     Returns
     -------
     float
-        Total integrated luminosity for the runs present in *data_dir*.
+        Total integrated luminosity for the runs present in *directories*.
     """
-    data_dir = Path(data_dir)
     lumi_file = Path(lumi_file)
 
     if not lumi_file.exists():
@@ -83,18 +112,10 @@ def compute_luminosity(data_dir, lumi_file):
 
     run_lumi = parse_lumi_file(lumi_file)
 
-    # Extract unique run numbers from data filenames
+    # Extract unique run numbers across all directories
     runs_found = set()
-    if data_dir.suffix == ".root":
-        # Single file — extract run number from its name
-        m = _RUN_RE.search(data_dir.name)
-        if m:
-            runs_found.add(int(m.group(1)))
-    else:
-        for root_file in sorted(data_dir.glob("*.root")):
-            m = _RUN_RE.search(root_file.name)
-            if m:
-                runs_found.add(int(m.group(1)))
+    for d in directories:
+        runs_found |= _extract_runs_from_path(d)
 
     # Sum luminosities
     total_lumi = 0.0
@@ -112,8 +133,8 @@ def compute_luminosity(data_dir, lumi_file):
         )
 
     logger.info(
-        "Luminosity from %d runs: %.6f (scanned %s)",
-        len(runs_found) - len(missing), total_lumi, data_dir,
+        "Luminosity from %d runs: %.6f",
+        len(runs_found) - len(missing), total_lumi,
     )
     return total_lumi
 
@@ -146,14 +167,21 @@ class Sample:
         dict
             Mapping of branch name to numpy array.
         """
-        path = Path(self.config.directory)
         tree = self.config.tree
         aliases = aliases or {}
 
-        if path.suffix == ".root":
-            pattern = f"{path}:{tree}"
-        else:
-            pattern = f"{path}/*.root:{tree}"
+        # Build list of uproot patterns from all directories
+        patterns = []
+        for d in self.config.directories:
+            p = Path(d)
+            if "*" in d:
+                # Glob pattern already specified by user
+                patterns.append(f"{d}:{tree}")
+            elif p.suffix == ".root":
+                patterns.append(f"{p}:{tree}")
+            else:
+                patterns.append(f"{p}/*.root:{tree}")
+        pattern = patterns if len(patterns) > 1 else patterns[0]
 
         branches = sorted(set(branches))
 
@@ -161,25 +189,33 @@ class Sample:
         aliased = [b for b in branches if b in aliases]
         direct = [b for b in branches if b not in aliases]
 
-        logger.info("Loading sample '%s' from %s", self.name, pattern)
+        logger.info("Loading sample '%s' from %s",
+                     self.name, patterns if len(patterns) > 1 else patterns[0])
         logger.debug("  branches: %s", branches)
         if aliased:
             logger.debug("  aliases: %s", {a: aliases[a] for a in aliased})
 
-        # Resolve aliases: separate TVector3 component aliases (ending in .fX/.fY/.fZ)
-        # from regular aliases that uproot can handle via its expressions engine
-        tvec_aliases = {}   # alias_name -> (full_branch_path, component)
-        expr_aliases = {}   # alias_name -> full_branch_path (for uproot expressions)
+        # Resolve aliases into three categories based on path type:
+        #   tvec_aliases:  .fX/.fY/.fZ suffix  → read parent via filter_name, extract component
+        #   split_aliases: contains "/"         → read via filter_name (not valid Python syntax)
+        #   expr_aliases:  everything else      → pass to uproot expressions+aliases
+        tvec_aliases = {}    # alias_name -> (parent_path, component)
+        split_aliases = {}   # alias_name -> full_branch_path
+        expr_aliases = {}    # alias_name -> full_branch_path
         for a in aliased:
             full_path = aliases[a]
             if full_path.endswith((".fX", ".fY", ".fZ")):
                 component = full_path.rsplit(".", 1)[1]  # "fX", "fY", or "fZ"
                 branch_path = full_path.rsplit(".", 1)[0]  # path without .fX
                 tvec_aliases[a] = (branch_path, component)
+            elif "/" in full_path:
+                # Paths like "vert./vert.invM_" or "track./track.phi0_" contain "/"
+                # and are not valid Python expressions — read directly via filter_name
+                split_aliases[a] = full_path
             else:
                 expr_aliases[a] = full_path
 
-        # Everything except TVector3 components goes into expressions
+        # Only expr aliases and direct branches go through the expression pipeline
         expr_branches = list(expr_aliases.keys()) + direct
 
         # TVector3 parent branches (paths with /) — read separately via filter_name
@@ -205,9 +241,25 @@ class Sample:
                 tvec_parents_set = set(tvec_parents)
                 tvec_arrays = uproot.concatenate(
                     pattern,
-                    filter_name=lambda name: name in tvec_parents_set,
+                    filter_name=lambda name: any(
+                        name == p or name == p + "."
+                        or name.startswith(p + ".") or name.startswith(p + "/")
+                        for p in tvec_parents_set
+                    ),
                     library="ak",
                 )
+
+            # Separate read for split-path branches (e.g. "vert./vert.invM_")
+            split_arrays = None
+            if split_aliases:
+                split_paths = set(split_aliases.values())
+                split_arrays = uproot.concatenate(
+                    pattern,
+                    filter_name=lambda name: name in split_paths,
+                    library="ak",
+                )
+                logger.debug("Split-branch fields loaded: %s", split_arrays.fields)
+
         except Exception as e:
             logger.error("Failed to load sample '%s': %s", self.name, e)
             raise
@@ -218,8 +270,41 @@ class Sample:
             if b in tvec_aliases:
                 branch_path, component = tvec_aliases[b]
                 short_name = branch_path.rsplit("/", 1)[-1] if "/" in branch_path else branch_path
-                vec = tvec_arrays[short_name]
-                self._data[b] = ak.to_numpy(getattr(vec, component))
+                fields = tvec_arrays.fields
+                logger.debug("TVector3 extract: branch=%s component=%s top_fields=%s",
+                             short_name, component, fields)
+                if short_name in fields:
+                    self._data[b] = ak.to_numpy(getattr(tvec_arrays[short_name], component))
+                elif short_name + "." in fields:
+                    self._data[b] = ak.to_numpy(getattr(tvec_arrays[short_name + "."], component))
+                elif component in fields:
+                    self._data[b] = ak.to_numpy(tvec_arrays[component])
+                else:
+                    candidates = [f for f in fields
+                                  if f == f"{short_name}.{component}"
+                                  or (f.endswith(f".{component}") and short_name in f)]
+                    if candidates:
+                        self._data[b] = ak.to_numpy(tvec_arrays[candidates[0]])
+                    else:
+                        raise KeyError(
+                            f"Cannot find TVector3 component '{component}' for branch "
+                            f"'{short_name}'. Available top-level fields: {fields}"
+                        )
+            elif b in split_aliases:
+                branch_path = split_aliases[b]
+                fields = split_arrays.fields
+                if branch_path in fields:
+                    self._data[b] = ak.to_numpy(split_arrays[branch_path])
+                else:
+                    # Try the leaf name after the last "/"
+                    leaf = branch_path.rsplit("/", 1)[-1]
+                    if leaf in fields:
+                        self._data[b] = ak.to_numpy(split_arrays[leaf])
+                    else:
+                        raise KeyError(
+                            f"Cannot find split branch '{branch_path}' (alias '{b}'). "
+                            f"Available fields: {fields}"
+                        )
             else:
                 self._data[b] = ak.to_numpy(arrays[b])
 
@@ -254,9 +339,12 @@ class Sample:
         """
         fallback = (1.0, 0.0, 0)
 
-        path = Path(self.config.directory)
-        # For single-file samples, look for summary.json in the parent dir
-        if path.suffix == ".root":
+        # Look for summary.json in the first directory
+        path = Path(self.config.directories[0])
+        if "*" in str(path):
+            # Glob pattern — use parent directory
+            summary_path = path.parent / "summary.json"
+        elif path.suffix == ".root":
             summary_path = path.parent / "summary.json"
         else:
             summary_path = path / "summary.json"
@@ -315,10 +403,15 @@ class Sample:
 
         for h in histogram_configs:
             branches |= extract_branch_names(h.variable)
+            if h.y_variable:
+                branches |= extract_branch_names(h.y_variable)
 
         for r in region_configs:
             branches |= extract_branch_names(r.selection)
 
         branches |= extract_branch_names(self.weight_expr)
+
+        if self.config.selection:
+            branches |= extract_branch_names(self.config.selection)
 
         return branches

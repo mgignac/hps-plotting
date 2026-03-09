@@ -4,11 +4,16 @@ import argparse
 import logging
 import sys
 
+import json
+from pathlib import Path
+
 from .config import load_config
 from .plotting.style import set_hps_style
 from .plotting.stack import plot_stack
 from .plotting.overlay import plot_overlay
 from .plotting.rad_frac import plot_rad_frac
+from .plotting.smearing import plot_smearing, build_tool_json
+from .plotting.abcd import plot_abcd, plot_abcd_summary, plot_abcd_summary
 from .results import process
 
 
@@ -20,6 +25,8 @@ def main():
     parser.add_argument("config", help="Path to YAML configuration file")
     parser.add_argument("-o", "--output-dir", default=None,
                         help="Override output directory")
+    parser.add_argument("-P", "--plots", nargs="+", default=None,
+                        help="Only run these named plot(s) (comma- or space-separated)")
     parser.add_argument("-H", "--histograms", nargs="+", default=None,
                         help="Only plot these histogram(s) from the config")
     parser.add_argument("--logy", action="store_true",
@@ -44,9 +51,34 @@ def main():
     if args.output_dir:
         config.output_dir = args.output_dir
 
+    # Filter plots if --plots is specified
+    if args.plots:
+        plot_names = set()
+        for item in args.plots:
+            for name in item.split(","):
+                name = name.strip()
+                if name:
+                    plot_names.add(name)
+        available = {p.name for p in config.plots}
+        unknown = plot_names - available
+        if unknown:
+            logger.error("Unknown plot(s): %s", ", ".join(sorted(unknown)))
+            logger.info("Available: %s", ", ".join(sorted(available)))
+            sys.exit(1)
+        config.plots = [p for p in config.plots if p.name in plot_names]
+        # Trim histograms to only those needed by the selected plots
+        needed = {h for p in config.plots for h in p.histograms}
+        config.histograms = [h for h in config.histograms if h.name in needed]
+
     # Filter histograms if --histograms is specified
     if args.histograms:
-        hist_names = set(args.histograms)
+        # Support both space-separated (-H a b) and comma-separated (-H a,b)
+        hist_names = set()
+        for item in args.histograms:
+            for name in item.split(","):
+                name = name.strip()
+                if name:
+                    hist_names.add(name)
         available = {h.name for h in config.histograms}
         unknown = hist_names - available
         if unknown:
@@ -77,6 +109,26 @@ def main():
     # Generate plots
     logger.info("Generating plots...")
     for plot_cfg in config.plots:
+
+        # ABCD plots load their own data and don't use the histogram pipeline
+        if plot_cfg.plot_type == "abcd":
+            outdir = plot_cfg.output_dir or config.output_dir
+            counts_cache = {}
+            for region_name in plot_cfg.regions:
+                region_cfg = region_map.get(region_name)
+                if region_cfg is None:
+                    logger.warning("Region '%s' not found, skipping.", region_name)
+                    continue
+                counts_cache[region_name] = plot_abcd(
+                    plot_cfg, region_cfg, config, samples_map,
+                    outdir, config.output_format,
+                )
+            plot_abcd_summary(plot_cfg, config, samples_map, outdir, config.output_format,
+                              counts_cache=counts_cache)
+            continue
+
+        smearing_results = {}  # accumulated per smearing plot for JSON output
+
         for region_name in plot_cfg.regions:
             region_cfg = region_map.get(region_name)
             if region_cfg is None:
@@ -89,21 +141,59 @@ def main():
                     logger.warning("Histogram '%s' not found, skipping.", hist_name)
                     continue
 
+                outdir = plot_cfg.output_dir or config.output_dir
                 if plot_cfg.plot_type == "stack":
                     plot_stack(
                         plot_cfg, hist_cfg, region_cfg, results,
-                        samples_map, config.output_dir, config.output_format,
+                        samples_map, outdir, config.output_format,
                     )
                 elif plot_cfg.plot_type == "overlay":
                     plot_overlay(
                         plot_cfg, hist_cfg, region_cfg, results,
-                        samples_map, config.output_dir, config.output_format,
+                        samples_map, outdir, config.output_format,
                     )
                 elif plot_cfg.plot_type == "rad_frac":
                     plot_rad_frac(
                         plot_cfg, hist_cfg, region_cfg, results,
-                        samples_map, config.output_dir, config.output_format,
+                        samples_map, outdir, config.output_format,
                     )
+                elif plot_cfg.plot_type == "smearing":
+                    result = plot_smearing(
+                        plot_cfg, hist_cfg, region_cfg, results,
+                        samples_map, outdir, config.output_format,
+                        beam_energy=config.beam_energy,
+                    )
+                    if result is not None:
+                        smearing_results[f"{region_name}/{hist_name}"] = result
+
+        # Write diagnostic JSON output after all histograms/regions for this smearing plot
+        if (plot_cfg.plot_type == "smearing"
+                and plot_cfg.smearing is not None
+                and plot_cfg.smearing.json_output
+                and smearing_results):
+            json_path = Path(plot_cfg.smearing.json_output)
+            json_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(json_path, "w") as f:
+                json.dump(smearing_results, f, indent=4)
+            logger.info("Smearing JSON written: %s", json_path)
+
+        # Write TrackSmearingTool-compatible JSON (merges with existing file)
+        if (plot_cfg.plot_type == "smearing"
+                and plot_cfg.smearing is not None
+                and plot_cfg.smearing.tool_json_output
+                and smearing_results):
+            tool_data = build_tool_json(plot_cfg.smearing, smearing_results, hist_map)
+            if tool_data:
+                tool_path = Path(plot_cfg.smearing.tool_json_output)
+                existing = {}
+                if tool_path.exists():
+                    with open(tool_path) as f:
+                        existing = json.load(f)
+                existing.update(tool_data)
+                tool_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(tool_path, "w") as f:
+                    json.dump(existing, f, indent=4)
+                logger.info("TrackSmearingTool JSON written: %s", tool_path)
 
     logger.info("Done.")
 

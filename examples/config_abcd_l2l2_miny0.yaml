@@ -1,0 +1,78 @@
+tree: "preselection"
+output_dir: "plots/abcd_l2l2_miny0/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+
+aliases:
+  vertex_mass: "vertex./vertex.invM_"
+  vertex_z:    "vertex./vertex.pos_.fZ"
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v5/data
+    sample_type: data
+    label: "Data (2021)"
+    color: "black"
+
+
+# L2L2 base selection (inclusive in vtx_z) plus vertex-z-sliced variants.
+regions:
+  - name: L2L2
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2"
+    label: "L2L2"
+
+  - name: L2L2_z5_10
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z >= 5) & (vertex_z < 10)"
+    label: "L2L2, $5 < z_{vtx} < 10$ mm"
+
+  - name: L2L2_z10_15
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z >= 10) & (vertex_z < 15)"
+    label: "L2L2, $10 < z_{vtx} < 15$ mm"
+
+  - name: L2L2_z15_20
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z >= 15) & (vertex_z < 20)"
+    label: "L2L2, $15 < z_{vtx} < 20$ mm"
+
+  - name: L2L2_z20_30
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z >= 20) & (vertex_z < 30)"
+    label: "L2L2, $20 < z_{vtx} < 30$ mm"
+
+  - name: L2L2_z30plus
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z >= 30)"
+    label: "L2L2, $z_{vtx} > 30$ mm"
+
+plots:
+  - name: abcd_l2l2_miny0
+    plot_type: abcd
+    samples: [data]
+    regions: [L2L2, L2L2_z5_10, L2L2_z10_15, L2L2_z15_20, L2L2_z20_30, L2L2_z30plus]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      # Mass scan: 30 - 200 MeV in 1 MeV steps
+      mass_scan_min:  0.03
+      mass_scan_max:  0.20
+      mass_scan_step: 0.003
+      # Fixed fallback windows (used if region not listed in mass_resolution)
+      mass_window_half_width: 0.005
+      sideband_gap:   0.002
+      sideband_width: 0.010
+      # min_y0 regions [mm]: signal = displaced, control = prompt
+      z_signal_min:  0.2
+      z_signal_max: 100.0
+      z_control_min:  0.0
+      z_control_max:  0.2
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true
+      # --- mass-dependent window sizing ---
+      # L2 hit (no L1): p0=2.1272, p1=-0.0065, p2=1.10e-4  (chi2/ndf=4.2/7)
+      sr_sigmas:  1.5
+      gap_sigmas: 0.5
+      sb_sigmas:  6.5
+      mass_resolution:
+        L2L2:         "0.0021272 - 0.0065 * m + 0.110 * m**2"
+        L2L2_z5_10:   "0.0021272 - 0.0065 * m + 0.110 * m**2"
+        L2L2_z10_15:  "0.0021272 - 0.0065 * m + 0.110 * m**2"
+        L2L2_z15_20:  "0.0021272 - 0.0065 * m + 0.110 * m**2"
+        L2L2_z20_30:  "0.0021272 - 0.0065 * m + 0.110 * m**2"
+        L2L2_z30plus: "0.0021272 - 0.0065 * m + 0.110 * m**2"

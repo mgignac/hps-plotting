@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .fit import fit_histogram
 from .style import add_hps_label
 
 logger = logging.getLogger(__name__)
@@ -40,17 +41,20 @@ def plot_overlay(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_di
         if hdata is None:
             continue
 
+        # Build label with yield (before normalization)
+        s_cfg = samples_map[s_name]
+        label = f"{s_cfg.label} ({hdata.integral:.0f})"
+
         if normalize:
             hdata = hdata.normalized()
 
-        s_cfg = samples_map[s_name]
         bin_centers = hdata.bin_centers
 
         ax.step(
             bin_centers, hdata.bin_contents,
             where="mid",
             color=s_cfg.color,
-            label=s_cfg.label,
+            label=label,
             linewidth=1.5,
         )
 
@@ -73,6 +77,29 @@ def plot_overlay(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_di
         ax.set_ylim(bottom=0.1 if not normalize else 1e-4)
     else:
         ax.set_ylim(bottom=0)
+
+    # Fit overlay
+    if plot_cfg.fit is not None:
+        fit_cfg = plot_cfg.fit
+        fit_sample = fit_cfg.sample or plot_cfg.samples[0]
+        hdata = region_results.get(fit_sample, {}).get(hist_name)
+        if hdata is not None:
+            if normalize:
+                hdata = hdata.normalized()
+            result = fit_histogram(hdata, fit_cfg, hist_cfg)
+            if result is not None:
+                popt, pcov, x_curve, y_curve, param_labels = result
+                perr = np.sqrt(np.diag(pcov))
+                ax.plot(x_curve, y_curve, color=fit_cfg.color, linewidth=2,
+                        linestyle="--", label="Fit")
+                if fit_cfg.show_params:
+                    lines = []
+                    for name, val, err in zip(param_labels, popt, perr):
+                        lines.append(f"${name} = {val:.3g} \\pm {err:.2g}$")
+                    ax.text(0.95, 0.55, "\n".join(lines),
+                            transform=ax.transAxes, fontsize=10,
+                            verticalalignment="top", horizontalalignment="right",
+                            bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
 
     ax.legend(loc="upper right")
     add_hps_label(ax)

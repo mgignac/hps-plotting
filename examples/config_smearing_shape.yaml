@@ -36,75 +36,25 @@ aliases:
   vtx_z: "vertex./vertex.pos_.fZ"
 
 samples:
-  - name: data
-    directory: /sdf/data/hps/physics2021/preselection/v7/data
-    sample_type: data
-    label: "Data"
-    color: "black"
-    weight: "1.0"
+  - name: unsmeared 
+    directory: /sdf/data/hps/physics2021/preselection/v5/tritrig
+    sample_type: background
+    label: "Tritrig (unsmeared)"
+    color: "#db9b34"
+    weight: "weight"
     scale: 1.0
 
-  - name: tridents
-    directory: /sdf/data/hps/physics2021/preselection/v7/tritrig_smeared
+  - name: smeared 
+    directory: /sdf/data/hps/physics2021/preselection/v5/tritrig_smeared
     sample_type: background
-    label: "Tridents"
-    color: "#e74c3c"
+    label: "Tritrig (smeared)"
+    color: "#c7c2b9"
     weight: "weight"
-    #selection : "(ele_has_truth_link==1 && pos_has_truth_link==1)"
-    scale: 1.0 
-    lumi_scale: true 
-
-  - name: wab
-    directory: /sdf/data/hps/physics2021/preselection/v7/wab_smeared
-    sample_type: background
-    label: "WAB"
-    color: "#3498db"
-    weight: "weight"
-    #selection : "(ele_has_truth_link==1 && pos_has_truth_link==1)"
-    scale: 1.0 
-    lumi_scale: true
-
-#  - name: oot
-#    directory: 
-#      - /sdf/data/hps/physics2021/preselection/v5/wab_smeared
-#      - /sdf/data/hps/physics2021/preselection/v5/tritrig_smeared
-#    sample_type: background
-#    label: "Out-of-time WABS"
-#    color: "#b3807b"
-#    weight: "weight"
-#    selection : "(ele_has_truth_link==0 || pos_has_truth_link==0)"
-#    scale: 2.0
-#    lumi_scale: true
-
-  - name: signal_120_eps4
-    directory: /sdf/data/hps/physics2021/preselection/v7/ap_signal_smeared/ap120MeV
-    sample_type: signal
-    label: "$m_{A'} = 120$ MeV, $\\epsilon = 10^{-4}$"
-    color: "#db3442"
-    weight: "weight * 1500.0 * exp(-true_ap.vtx_z_ / (true_ap_betagamma * 0.067)) / (true_ap_betagamma * 0.067)"
-    scale: 1.0
-
-  - name: signal_120_eps5
-    directory: /sdf/data/hps/physics2021/preselection/v7/ap_signal_smeared/ap120MeV
-    sample_type: signal
-    label: "$m_{A'} = 120$ MeV, $\\epsilon = 10^{-5}$"
-    color: "#dba134"
-    weight: "weight * 1500.0 * exp(-true_ap.vtx_z_ / (true_ap_betagamma * 6.67)) / (true_ap_betagamma * 6.67)"
     scale: 1.0
 
 regions:
-
   - name: loose
     selection: "vtx_invM > 0.0"
-    label: "Loose"
-  - name: loose_L1
-    selection: "vtx_invM > 0.110 && vtx_invM<0.130 && psum>0.0 && eleL1 && posL1 && eleL2 && posL2"
-    label: "Loose"
-  - name: loose_L2
-    selection: "vtx_invM > 0.110 && vtx_invM<0.130 && psum>0.0 && !eleL1 && !posL1 && eleL2 && posL2"
-    label: "Loose"
-  - name: loose_L3
-    selection: "vtx_invM > 0.110 && vtx_invM<0.130 && psum>0.0 && !eleL1 && !posL1 && !eleL2 && !posL2 && eleL3 && posL3"
     label: "Loose"
 
 histograms:
@@ -311,9 +261,9 @@ histograms:
 
   - name: vtx_z
     variable: vtx_z
-    bins: 35
-    x_min: -20.0
-    x_max: 50.0
+    bins: 120
+    x_min: -50.0
+    x_max: 120.0
     x_label: "$z_{vtx}$ [mm]"
     log_y : true
 
@@ -326,17 +276,10 @@ histograms:
     x_label: "min $|y_0|$ [mm]"
     log_y : true
 
-  - name: vtx_proj_sig
-    variable: vtx_proj_sig
-    bins: 50
-    x_min: 0.0
-    x_max: 15.0
-    x_label: "Vertex projection significance"
-    log_y : true
-
 plots:
-  - name: stack_loose
-    plot_type: stack
+  - name: bkgshape 
+    plot_type: overlay 
+    output_dir: "plots/smearing_shape/"
     histograms:
       - vtx_mass
       - vtx_chi2
@@ -363,30 +306,11 @@ plots:
       - ele_clus_time
       - pos_clus_time
       - min_y0
-      - vtx_proj_sig
       - vtx_x
       - vtx_y
       - vtx_z
       - clus_dt
     regions:
       - loose
-      - loose_L1
-      - loose_L2
-      - loose_L3
-
-    samples: [signal_120_eps4, signal_120_eps5, tridents, wab, data]
-    data_sample: data
-#    normalize_to_data: true
-#    background_fractions:
-#      tridents: 0.8
-#      wab: 0.2
-    signal_fractions:
-      signal_120_eps4: 0.40
-      signal_120_eps5: 0.40
-
-  - name: overlay_regions
-    plot_type: overlay
-    histograms: [psum]
-    regions: [loose_L1,loose_L2,loose_L3]
-    samples: [tridents,wab]
+    samples: [unsmeared,smeared]
     normalize: true

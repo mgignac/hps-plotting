@@ -1,0 +1,226 @@
+tree: "preselection"
+output_dir: "plots/truth_resolution/"
+output_format: "pdf"
+beam_energy: 3.74  # GeV — used for scale correction panel (mu / E_beam)
+
+# Map friendly names to TVector3 sub-branches (read via uproot .fX/.fY/.fZ)
+aliases:
+  ele_px:       "ele_track_p.fX"
+  ele_py:       "ele_track_p.fY"
+  ele_pz:       "ele_track_p.fZ"
+  ele_truth_px: "ele_truth_p.fX"
+  ele_truth_py: "ele_truth_p.fY"
+  ele_truth_pz: "ele_truth_p.fZ"
+  pos_px:       "pos_track_p.fX"
+  pos_py:       "pos_track_p.fY"
+  pos_pz:       "pos_track_p.fZ"
+  pos_truth_px: "pos_truth_p.fX"
+  pos_truth_py: "pos_truth_p.fY"
+  pos_truth_pz: "pos_truth_p.fZ"
+
+samples:
+  - name: mc_unsmeared
+    directory: /sdf/data/hps/physics2021/preselection/v6/tritrig
+    derive_smearing: false
+    show_scale: true  # include in scale correction panel
+    sample_type: background
+    label: "MC (unsmeared)"
+    color: "#3498db"
+    weight: "1.0"
+    scale: 1.0
+
+  - name: mc_smeared
+    directory: /sdf/data/hps/physics2021/preselection/v6/tritrig_smeared
+    derive_smearing: false
+    sample_type: background
+    label: "MC (omega-vsphi)"
+    color: "#e74c3c"
+    weight: "1.0"
+    scale: 1.0
+
+  - name: mc_ptan_smeared
+    directory: /sdf/data/hps/physics2021/preselection/v6/p-vs-tanL-smearing/tritrig_smeared
+    derive_smearing: false
+    sample_type: background
+    label: "MC (p-vs-tanL)"
+    color: "#593ce7"
+    weight: "1.0"
+    scale: 1.0
+
+  - name: mc_otan_smeared
+    directory: /sdf/data/hps/physics2021/preselection/v6/omega-vs-tanL-smearing/tritrig_smeared
+    derive_smearing: false
+    sample_type: background
+    label: "MC (omega-vs-tanL)"
+    color: "#3ce764"
+    weight: "1.0"
+    scale: 1.0
+
+  - name: mc_pphi0_smeared
+    directory: /sdf/data/hps/physics2021/preselection/v6/p-vs-phi0-smearing/tritrig_smeared
+    derive_smearing: false
+    sample_type: background
+    label: "MC (p-vs-phi0)"
+    color: "#e7a63c"
+    weight: "1.0"
+    scale: 1.0
+
+# Require truth matching; split by electron volume (sign of truth py: + = top, - = bot)
+regions:
+  - name: truth_matched
+    selection: "ele_has_truth_link & pos_has_truth_link"
+    label: "Truth-matched"
+
+  - name: truth_matched_top
+    selection: "ele_has_truth_link & pos_has_truth_link & (ele_truth_py > 0)"
+    label: "Top (ele)"
+
+  - name: truth_matched_bot
+    selection: "ele_has_truth_link & pos_has_truth_link & (ele_truth_py < 0)"
+    label: "Bottom (ele)"
+
+histograms:
+  # ---- Electron ----
+
+  # 1D inclusive: overall delta_p distribution (useful sanity check)
+  - name: ele_dp_inclusive
+    variable: "sqrt(ele_px**2 + ele_py**2 + ele_pz**2) - sqrt(ele_truth_px**2 + ele_truth_py**2 + ele_truth_pz**2)"
+    bins: 80
+    x_min: -0.3
+    x_max: 0.3
+    x_label: "$p^{\\rm reco} - p^{\\rm true}_{e^-}$ [GeV]"
+
+  # 2D: delta_p vs true momentum — main resolution study
+  - name: ele_dp_vs_truth_p
+    variable: "sqrt(ele_truth_px**2 + ele_truth_py**2 + ele_truth_pz**2)"
+    bins: 12
+    x_min: 0.5
+    x_max: 3.5
+    x_label: "$p^{\\rm true}_{e^-}$ [GeV]"
+    y_variable: "sqrt(ele_px**2 + ele_py**2 + ele_pz**2) - sqrt(ele_truth_px**2 + ele_truth_py**2 + ele_truth_pz**2)"
+    y_bins: 80
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$p^{\\rm reco} - p^{\\rm true}_{e^-}$ [GeV]"
+
+  # 2D: delta_p vs truth tan(lambda)
+  - name: ele_dp_vs_tanL
+    variable: "ele_truth_pz / sqrt(ele_truth_px**2 + ele_truth_py**2)"
+    bins: 12
+    x_min: -0.06
+    x_max: 0.06
+    x_label: "tan$\\lambda$ (truth, $e^-$)"
+    y_variable: "sqrt(ele_px**2 + ele_py**2 + ele_pz**2) - sqrt(ele_truth_px**2 + ele_truth_py**2 + ele_truth_pz**2)"
+    y_bins: 80
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$p^{\\rm reco} - p^{\\rm true}_{e^-}$ [GeV]"
+
+  # 2D: delta_p vs truth phi0
+  - name: ele_dp_vs_phi0
+    variable: "atan2(ele_truth_py, ele_truth_px)"
+    bins: 15
+    x_min: -0.1
+    x_max: 0.2
+    x_label: "$\\phi_0$ (truth, $e^-$)"
+    y_variable: "sqrt(ele_px**2 + ele_py**2 + ele_pz**2) - sqrt(ele_truth_px**2 + ele_truth_py**2 + ele_truth_pz**2)"
+    y_bins: 80
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$p^{\\rm reco} - p^{\\rm true}_{e^-}$ [GeV]"
+
+  # ---- Positron ----
+
+  - name: pos_dp_inclusive
+    variable: "sqrt(pos_px**2 + pos_py**2 + pos_pz**2) - sqrt(pos_truth_px**2 + pos_truth_py**2 + pos_truth_pz**2)"
+    bins: 80
+    x_min: -0.3
+    x_max: 0.3
+    x_label: "$p^{\\rm reco} - p^{\\rm true}_{e^+}$ [GeV]"
+
+  - name: pos_dp_vs_truth_p
+    variable: "sqrt(pos_truth_px**2 + pos_truth_py**2 + pos_truth_pz**2)"
+    bins: 12
+    x_min: 0.5
+    x_max: 3.5
+    x_label: "$p^{\\rm true}_{e^+}$ [GeV]"
+    y_variable: "sqrt(pos_px**2 + pos_py**2 + pos_pz**2) - sqrt(pos_truth_px**2 + pos_truth_py**2 + pos_truth_pz**2)"
+    y_bins: 80
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$p^{\\rm reco} - p^{\\rm true}_{e^+}$ [GeV]"
+
+  # 2D: delta_p vs truth tan(lambda)
+  - name: pos_dp_vs_tanL
+    variable: "pos_truth_pz / sqrt(pos_truth_px**2 + pos_truth_py**2)"
+    bins: 12
+    x_min: -0.06
+    x_max: 0.06
+    x_label: "tan$\\lambda$ (truth, $e^+$)"
+    y_variable: "sqrt(pos_px**2 + pos_py**2 + pos_pz**2) - sqrt(pos_truth_px**2 + pos_truth_py**2 + pos_truth_pz**2)"
+    y_bins: 80
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$p^{\\rm reco} - p^{\\rm true}_{e^+}$ [GeV]"
+
+  # 2D: delta_p vs truth phi0
+  - name: pos_dp_vs_phi0
+    variable: "atan2(pos_truth_py, pos_truth_px)"
+    bins: 15
+    x_min: -0.1
+    x_max: 0.2
+    x_label: "$\\phi_0$ (truth, $e^+$)"
+    y_variable: "sqrt(pos_px**2 + pos_py**2 + pos_pz**2) - sqrt(pos_truth_px**2 + pos_truth_py**2 + pos_truth_pz**2)"
+    y_bins: 80
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$p^{\\rm reco} - p^{\\rm true}_{e^+}$ [GeV]"
+
+plots:
+  # Electron momentum resolution
+  - name: ele_truth_resolution
+    plot_type: smearing
+    histograms:
+      - ele_dp_inclusive
+      - ele_dp_vs_truth_p
+      - ele_dp_vs_tanL
+      - ele_dp_vs_phi0
+    regions:
+      - truth_matched
+      - truth_matched_top
+      - truth_matched_bot
+    samples: [mc_unsmeared, mc_otan_smeared, mc_ptan_smeared, mc_smeared, mc_pphi0_smeared]
+    smearing:
+      data_sample: mc_ptan_smeared      # "data" role: smeared MC (higher resolution)
+      mc_sample:   mc_unsmeared         # "MC"   role: unsmeared baseline
+      extra_samples: [mc_smeared, mc_otan_smeared, mc_pphi0_smeared]
+      smearing_type: absolute
+      fit_range: [-0.25, 0.25]
+      sigma_range: 1.5
+      core_fraction: 0.95
+      scale_panel: false
+      json_output: "plots/truth_resolution/ele_resolution.json"
+
+  # Positron momentum resolution
+  - name: pos_truth_resolution
+    plot_type: smearing
+    histograms:
+      - pos_dp_inclusive
+      - pos_dp_vs_truth_p
+      - pos_dp_vs_tanL
+      - pos_dp_vs_phi0
+    regions:
+      - truth_matched
+      - truth_matched_top
+      - truth_matched_bot
+    samples: [mc_unsmeared, mc_otan_smeared, mc_ptan_smeared, mc_smeared, mc_pphi0_smeared]
+    smearing:
+      data_sample: mc_ptan_smeared
+      mc_sample:   mc_unsmeared
+      extra_samples: [mc_smeared, mc_otan_smeared, mc_pphi0_smeared]
+      smearing_type: absolute
+      fit_range: [-0.25, 0.25]
+      sigma_range: 1.5
+      core_fraction: 0.95
+      scale_panel: false
+      json_output: "plots/truth_resolution/pos_resolution.json"

@@ -1,0 +1,379 @@
+tree: "tracks"
+output_dir: "plots/track_smearing/"
+output_format: "pdf"
+beam_energy: 3.74  # GeV — used for scale correction panel (mu / E_beam)
+
+# Global aliases use unsmeared branches (used for smearing derivation: data vs mc_unsmeared).
+# mc_smeared overrides the kinematic aliases via its per-sample aliases block below.
+aliases:
+  track_phi0:        "track./track.phi0_"
+  track_omega:       "track./track.omega_"
+  track_tan_lambda:  "track./track.tan_lambda_"
+  track_z0:          "track./track.z0_"
+  track_px:          "track./track.px_"
+  track_py:          "track./track.py_"
+  track_pz:          "track./track.pz_"
+  # Metadata (unchanged by smearing)
+  track_d0:          "track./track.d0_"
+  track_chi2:        "track./track.chi2_"
+  track_ndf:         "track./track.ndf_"
+  track_n_hits:      "track./track.n_hits_"
+  track_volume:      "track./track.track_volume_"  # 0 = top, 1 = bottom
+  track_charge:      "track./track.charge_"
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/users/mgignac/output/analysis/smearing/DATA/v9/v20/0/all.root
+    sample_type: data
+    label: "Data"
+    color: "black"
+    weight: "1.0"
+    scale: 1.0
+    derive_smearing: false
+    aliases:  # override kinematic branches to use smeared collection
+      track_phi0:       "track_smeared./track_smeared.phi0_"
+      track_omega:      "track_smeared./track_smeared.omega_"
+      track_tan_lambda: "track_smeared./track_smeared.tan_lambda_"
+      track_z0:         "track_smeared./track_smeared.z0_"
+      track_px:         "track_smeared./track_smeared.px_"
+      track_py:         "track_smeared./track_smeared.py_"
+      track_pz:         "track_smeared./track_smeared.pz_"
+
+
+  - name: mc_unsmeared
+    directory: /sdf/data/hps/users/mgignac/output/analysis/smearing/MC/v9/v20/0/all.root
+    sample_type: background
+    label: "MC (unsmeared)"
+    color: "#3498db"
+    weight: "1.0"
+    scale: 1.0
+    show_scale: true  # include in scale correction panel
+    # uses global aliases — reads unsmeared track branches
+   
+  - name: mc_smeared_flat
+    directory: /sdf/data/hps/users/mgignac/output/analysis/smearing/MC/v9/v20-flat/0/all.root
+    sample_type: background
+    label: "MC (const smeared)"
+    color: "#e7d63c"
+    weight: "1.0"
+    scale: 1.0
+    derive_smearing: false
+    aliases:  # override kinematic branches to use smeared collection
+      track_phi0:       "track_smeared./track_smeared.phi0_"
+      track_omega:      "track_smeared./track_smeared.omega_"
+      track_tan_lambda: "track_smeared./track_smeared.tan_lambda_"
+      track_z0:         "track_smeared./track_smeared.z0_"
+      track_px:         "track_smeared./track_smeared.px_"
+      track_py:         "track_smeared./track_smeared.py_"
+      track_pz:         "track_smeared./track_smeared.pz_"
+
+
+  - name: mc_smeared_omega_flat
+    directory: /sdf/data/hps/users/mgignac/output/analysis/smearing/MC/v9/v22-omega-flat/0/all.root
+    sample_type: background
+    label: "MC (const omega smeared)"
+    color: "#e7d63c"
+    weight: "1.0"
+    scale: 1.0
+    derive_smearing: false
+    aliases:  # override kinematic branches to use smeared collection
+      track_phi0:       "track_smeared./track_smeared.phi0_"
+      track_omega:      "track_smeared./track_smeared.omega_"
+      track_tan_lambda: "track_smeared./track_smeared.tan_lambda_"
+      track_z0:         "track_smeared./track_smeared.z0_"
+      track_px:         "track_smeared./track_smeared.px_"
+      track_py:         "track_smeared./track_smeared.py_"
+      track_pz:         "track_smeared./track_smeared.pz_"
+
+
+  - name: mc_smeared_tanL
+    directory: /sdf/data/hps/users/mgignac/output/analysis/smearing/MC/v9/v20/0/all.root
+    sample_type: background
+    label: "MC (tanL smeared)"
+    color: "#e74c3c"
+    weight: "1.0"
+    scale: 1.0
+    derive_smearing: false
+    aliases:  # override kinematic branches to use smeared collection
+      track_phi0:       "track_smeared./track_smeared.phi0_"
+      track_omega:      "track_smeared./track_smeared.omega_"
+      track_tan_lambda: "track_smeared./track_smeared.tan_lambda_"
+      track_z0:         "track_smeared./track_smeared.z0_"
+      track_px:         "track_smeared./track_smeared.px_"
+      track_py:         "track_smeared./track_smeared.py_"
+      track_pz:         "track_smeared./track_smeared.pz_"
+
+  - name: mc_smeared_omega_tanL
+    directory: /sdf/data/hps/users/mgignac/output/analysis/smearing/MC/v9/v22-omega-tanL/0/all.root
+    sample_type: background
+    label: "MC (tanL/omega smeared)"
+    color: "#4a3ce7"
+    weight: "1.0"
+    scale: 1.0
+    derive_smearing: false
+    aliases:  # override kinematic branches to use smeared collection
+      track_phi0:       "track_smeared./track_smeared.phi0_"
+      track_omega:      "track_smeared./track_smeared.omega_"
+      track_tan_lambda: "track_smeared./track_smeared.tan_lambda_"
+      track_z0:         "track_smeared./track_smeared.z0_"
+      track_px:         "track_smeared./track_smeared.px_"
+      track_py:         "track_smeared./track_smeared.py_"
+      track_pz:         "track_smeared./track_smeared.pz_"
+
+  - name: mc_smeared_omega_phi0
+    directory: /sdf/data/hps/users/mgignac/output/analysis/smearing/MC/v9/v22-omega-phi0/0/all.root 
+    sample_type: background
+    label: "MC (phi/omega smeared)"
+    color: "#3cdce7"
+    weight: "1.0"
+    scale: 1.0
+    derive_smearing: false
+    aliases:  # override kinematic branches to use smeared collection
+      track_phi0:       "track_smeared./track_smeared.phi0_"
+      track_omega:      "track_smeared./track_smeared.omega_"
+      track_tan_lambda: "track_smeared./track_smeared.tan_lambda_"
+      track_z0:         "track_smeared./track_smeared.z0_"
+      track_px:         "track_smeared./track_smeared.px_"
+      track_py:         "track_smeared./track_smeared.py_"
+      track_pz:         "track_smeared./track_smeared.pz_"
+
+  - name: mc_smeared_phi0
+    directory: /sdf/data/hps/users/mgignac/output/analysis/smearing/MC/v9/v20-phi0/0/all.root
+    sample_type: background
+    label: "MC (phi0 smeared)"
+    color: "#78e73c"
+    weight: "1.0"
+    scale: 1.0
+    derive_smearing: false
+    aliases:  # override kinematic branches to use smeared collection
+      track_phi0:       "track_smeared./track_smeared.phi0_"
+      track_omega:      "track_smeared./track_smeared.omega_"
+      track_tan_lambda: "track_smeared./track_smeared.tan_lambda_"
+      track_z0:         "track_smeared./track_smeared.z0_"
+      track_px:         "track_smeared./track_smeared.px_"
+      track_py:         "track_smeared./track_smeared.py_"
+      track_pz:         "track_smeared./track_smeared.pz_"
+
+regions:
+  - name: all
+    selection: "track_chi2 > 0"
+    label: "All tracks"
+
+  - name: top
+    selection: "track_volume == 0"
+    label: "Top"
+
+  - name: bot
+    selection: "track_volume == 1"
+    label: "Bottom"
+
+histograms:
+  # --- 1D: fit directly to extract smearing factor ---
+
+  - name: p_inclusive
+    variable: "sqrt(track_px**2 + track_py**2 + track_pz**2)"
+    bins: 50
+    x_min: 2.0
+    x_max: 6.0
+    x_label: "$p$ [GeV]"
+
+  - name: omega_inclusive
+    variable: track_omega
+    bins: 50
+    x_min: 0.00004
+    x_max: 0.00014
+    x_label: "$\\omega$ [mm$^{-1}$]"
+
+  # --- 2D: slice in X (tanLambda or phi), fit Y (p or omega) per bin ---
+
+  - name: p_vs_tanlambda
+    variable: track_tan_lambda        # X axis: slicing variable
+    bins: 12
+    x_min: -0.06
+    x_max: 0.06
+    x_label: "tan$\\lambda$"
+    y_variable: "sqrt(track_px**2 + track_py**2 + track_pz**2)"
+    y_bins: 50
+    y_min: 2.0
+    y_max: 6.0
+    y_label_2d: "$p$ [GeV]"
+    tool_variable_name: tanLambda     # variable name for TrackSmearingTool binned lookup
+
+  - name: p_vs_phi
+    variable: track_phi0              # X axis
+    bins: 15
+    x_min: -0.1
+    x_max: 0.2
+    x_label: "$\\phi_0$"
+    y_variable: "sqrt(track_px**2 + track_py**2 + track_pz**2)"
+    y_bins: 50
+    y_min: 2.0
+    y_max: 6.0
+    y_label_2d: "$p$ [GeV]"
+    tool_variable_name: phi0     # variable name for TrackSmearingTool binned lookup
+
+  - name: omega_vs_tanlambda
+    variable: track_tan_lambda
+    bins: 12
+    x_min: -0.06
+    x_max: 0.06
+    x_label: "tan$\\lambda$"
+    y_variable: track_omega
+    y_bins: 50
+    y_min: 0.00004
+    y_max: 0.00014
+    y_label_2d: "$\\omega$ [mm$^{-1}$]"
+    tool_variable_name: tanLambda     # variable name for TrackSmearingTool binned lookup
+
+  - name: omega_vs_phi
+    variable: track_phi0
+    bins: 15
+    x_min: -0.1
+    x_max: 0.2
+    x_label: "$\\phi_0$"
+    y_variable: track_omega
+    y_bins: 50
+    y_min: 0.00004
+    y_max: 0.00014
+    y_label_2d: "$\\omega$ [mm$^{-1}$]"
+    tool_variable_name: phi0     # variable name for TrackSmearingTool binned lookup
+
+  - name: p_vs_nhits
+    variable: track_n_hits
+    bins: 7
+    x_min: 7.5
+    x_max: 14.5
+    x_label: "N hits"
+    y_variable: "sqrt(track_px**2 + track_py**2 + track_pz**2)"
+    y_bins: 50
+    y_min: 2.0
+    y_max: 6.0
+    y_label_2d: "$p$ [GeV]"
+    tool_variable_name: nHits     # variable name for TrackSmearingTool binned lookup
+
+  - name: omega_vs_nhits
+    variable: track_n_hits
+    bins: 7
+    x_min: 7.5
+    x_max: 14.5
+    x_label: "N hits"
+    y_variable: track_omega
+    y_bins: 50
+    y_min: 0.00004
+    y_max: 0.00014
+    y_label_2d: "$\\omega$ [mm$^{-1}$]"
+    tool_variable_name: nHits     # variable name for TrackSmearingTool binned lookup
+
+  # --- z0 smearing ---
+
+  - name: z0_inclusive
+    variable: track_z0
+    bins: 50
+    x_min: -0.3
+    x_max: 0.3
+    x_label: "$z_0$ [mm]"
+
+  - name: z0_vs_tanlambda
+    variable: track_tan_lambda
+    bins: 12
+    x_min: -0.06
+    x_max: 0.06
+    x_label: "tan$\\lambda$"
+    y_variable: track_z0
+    y_bins: 50
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$z_0$ [mm]"
+    tool_variable_name: tanLambda
+
+  - name: z0_vs_phi
+    variable: track_phi0
+    bins: 15
+    x_min: -0.1
+    x_max: 0.2
+    x_label: "$\\phi_0$"
+    y_variable: track_z0
+    y_bins: 50
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$z_0$ [mm]"
+    tool_variable_name: phi0
+
+plots:
+  - name: smearing_p_relative
+    plot_type: smearing
+    histograms:
+      - p_inclusive
+      - p_vs_tanlambda
+      - p_vs_phi
+      - p_vs_nhits
+    regions:
+      - all
+      - top
+      - bot
+    samples: [data, mc_unsmeared, mc_smeared_flat,mc_smeared_tanL,mc_smeared_phi0,mc_smeared_omega_tanL,mc_smeared_omega_phi0]
+    smearing:
+      data_sample: data
+      mc_sample: mc_unsmeared
+      extra_samples: [mc_smeared_tanL,mc_smeared_flat,mc_smeared_phi0,mc_smeared_omega_tanL,mc_smeared_omega_phi0]
+      smearing_type: relative
+      fit_range: [2.2, 5.2]       # GeV: FEE peak region
+      sigma_range: 1.5
+      json_output: "plots/track_smearing/smearing_p.json"
+      top_region: top             # region used for top-volume tracks
+      bot_region: bot             # region used for bot-volume tracks
+      tool_json_output: "plots/track_smearing/tool_smearing.json"
+      tool_section: pSmearing     # key in TrackSmearingTool JSON
+      scale_panel: false
+
+  - name: smearing_omega_absolute
+    plot_type: smearing
+    histograms:
+      - omega_inclusive
+      - omega_vs_tanlambda
+      - omega_vs_phi
+      - omega_vs_nhits
+    regions:
+      - all
+      - top
+      - bot
+    samples: [data, mc_unsmeared, mc_smeared_omega_flat, mc_smeared_omega_tanL,mc_smeared_omega_phi0]
+    smearing:
+      data_sample: data
+      mc_sample: mc_unsmeared
+      extra_samples: [mc_smeared_omega_flat,mc_smeared_omega_phi0,mc_smeared_omega_tanL]
+      smearing_type: absolute
+      fit_range: [-0.0001, 0.0001]
+      sigma_range: 1.5
+      json_output: "plots/track_smearing/smearing_omega.json"
+      top_region: top
+      bot_region: bot
+      tool_json_output: "plots/track_smearing/tool_smearing.json"  # same file; merged
+      tool_section: omegaSmearing
+      scale_panel: false
+
+  - name: smearing_z0_absolute
+    plot_type: smearing
+    histograms:
+      - z0_inclusive
+      - z0_vs_tanlambda
+      - z0_vs_phi
+    regions:
+      - all
+      - top
+      - bot
+    samples: [data, mc_unsmeared, mc_smeared_flat, mc_smeared_omega_tanL, mc_smeared_omega_phi0]
+    smearing:
+      data_sample: data
+      mc_sample: mc_unsmeared
+      extra_samples: [mc_smeared_flat,mc_smeared_omega_tanL,mc_smeared_omega_phi0]
+      smearing_type: absolute
+      fit_range: [-0.3, 0.3]
+      sigma_range: 1.5
+      json_output: "plots/track_smearing/smearing_z0.json"
+      top_region: top
+      bot_region: bot
+      tool_json_output: "plots/track_smearing/tool_smearing.json"  # same file; merged
+      tool_section: z0Smearing
+      #scale_reference: 0.0  # show μ directly (mm offset from 0), not μ/E_beam
+      scale_panel: false

@@ -1,16 +1,91 @@
 """Processing orchestration: samples x regions x histograms."""
 
+import copy
 import logging
 
 import numpy as np
 
-from .config import Config
-from .histogram import fill_histogram
+from .config import Config, SampleConfig
+from .histogram import fill_histogram, fill_histogram_2d
 from .region import Region
 from .sample import Sample, compute_luminosity
 from .utils import safe_evaluate
 
 logger = logging.getLogger(__name__)
+
+
+def _process_single_sample(sample, lumi_weight, regions, hists, config):
+    """Process one sample (single directory) through all regions and histograms.
+
+    Returns
+    -------
+    dict
+        sub_results[region_name][hist_name] → HistogramData
+    """
+    hist_list = list(hists.values())
+    region_list = list(regions.values())
+    region_configs = [r.config for r in region_list]
+    branches = sample.get_needed_branches(hist_list, region_configs)
+
+    # Merge global aliases with per-sample overrides (sample wins on conflicts)
+    effective_aliases = {**config.aliases, **sample.config.aliases}
+    data = sample.load(branches, aliases=effective_aliases)
+
+    # Sample-level selection mask
+    sample_mask = None
+    if sample.config.selection:
+        sample_mask = np.asarray(
+            safe_evaluate(sample.config.selection, data), dtype=bool
+        )
+        n_pass = np.sum(sample_mask)
+        n_total = len(sample_mask)
+        logger.info(
+            "  Sample selection for '%s': %d / %d pass (%.1f%%)",
+            sample.name, n_pass, n_total,
+            100 * n_pass / n_total if n_total > 0 else 0,
+        )
+
+    sub_results = {}
+    for region_name, region in regions.items():
+        mask = region.apply(data)
+        if sample_mask is not None:
+            mask = mask & sample_mask
+
+        sub_results[region_name] = {}
+        for hist_name, hist_cfg in hists.items():
+            values = safe_evaluate(hist_cfg.variable, data, mask=mask)
+            weights = safe_evaluate(sample.weight_expr, data, mask=mask)
+
+            total_scale = sample.scale * lumi_weight
+            if total_scale != 1.0:
+                weights = np.asarray(weights, dtype=float) * total_scale
+
+            if np.ndim(weights) == 0:
+                weights = np.full_like(values, float(weights), dtype=float)
+
+            if hist_cfg.y_variable:
+                y_values = safe_evaluate(hist_cfg.y_variable, data, mask=mask)
+                hdata = fill_histogram_2d(
+                    values, y_values, weights,
+                    hist_cfg.bins, hist_cfg.x_min, hist_cfg.x_max,
+                    hist_cfg.y_bins, hist_cfg.y_min, hist_cfg.y_max,
+                )
+                logger.info(
+                    "  %s / %s / %s: total weight = %.1f",
+                    sample.name, region_name, hist_name, np.sum(hdata.contents),
+                )
+            else:
+                hdata = fill_histogram(
+                    values, weights,
+                    hist_cfg.bins, hist_cfg.x_min, hist_cfg.x_max,
+                )
+                logger.info(
+                    "  %s / %s / %s: integral = %.1f",
+                    sample.name, region_name, hist_name, hdata.integral,
+                )
+            sub_results[region_name][hist_name] = hdata
+
+    return sub_results
 
 
 def process(config: Config):
@@ -38,7 +113,7 @@ def process(config: Config):
         )
         if data_sample:
             config.luminosity = compute_luminosity(
-                data_sample.directory, config.lumi_file
+                data_sample.directories, config.lumi_file
             )
         else:
             logger.warning("lumi_file set but no data sample found — using luminosity=%.4g",
@@ -50,6 +125,8 @@ def process(config: Config):
     needed_hists = set()
 
     for plot in config.plots:
+        if plot.plot_type == "abcd":
+            continue  # ABCD loads its own data; skip histogram pipeline
         needed_samples |= set(plot.samples)
         needed_regions |= set(plot.regions)
         needed_hists |= set(plot.histograms)
@@ -82,68 +159,89 @@ def process(config: Config):
     # Process each sample
     results = {}
     for sample_name, sample in samples.items():
-        # Collect all needed branches
-        hist_list = list(hists.values())
-        region_list = list(regions.values())
-        region_configs = [r.config for r in region_list]
-        branches = sample.get_needed_branches(hist_list, region_configs)
+        needs_split = (
+            sample.config.lumi_scale
+            and len(sample.config.directories) > 1
+        )
 
-        # Load data
-        data = sample.load(branches, aliases=config.aliases)
+        if needs_split:
+            # Process each directory as a sub-sample with its own lumi weight,
+            # then merge the histograms.
+            logger.info("Processing sample '%s' (%d directories, per-directory lumi scaling)",
+                        sample_name, len(sample.config.directories))
+            merged = None
 
-        # Compute luminosity weight if enabled
-        lumi_weight = 1.0
-        if sample.config.lumi_scale:
-            lumi_weight, xsec, n_gen = sample.get_lumi_weight(config.luminosity)
-            total_scale = sample.scale * lumi_weight
-            logger.info(
-                "Lumi weight for '%s':\n"
-                "    cross_section  = %.4g\n"
-                "    luminosity     = %.4g\n"
-                "    n_generated    = %d\n"
-                "    lumi_weight    = %.4g\n"
-                "    sample scale   = %.4g\n"
-                "    total scale    = %.4g",
-                sample_name, xsec, config.luminosity, n_gen,
-                lumi_weight, sample.scale, total_scale,
+            for i, directory in enumerate(sample.config.directories):
+                # Create a single-directory config copy
+                sub_cfg = copy.copy(sample.config)
+                sub_cfg.directory = directory
+                sub_cfg.directories = [directory]
+                sub_sample = Sample(sub_cfg)
+
+                lumi_weight, xsec, n_gen = sub_sample.get_lumi_weight(config.luminosity)
+                total_scale = sub_sample.scale * lumi_weight
+                logger.info(
+                    "Lumi weight for '%s' [dir %d/%d]:\n"
+                    "    directory      = %s\n"
+                    "    cross_section  = %.4g\n"
+                    "    luminosity     = %.4g\n"
+                    "    n_generated    = %d\n"
+                    "    lumi_weight    = %.4g\n"
+                    "    sample scale   = %.4g\n"
+                    "    total scale    = %.4g",
+                    sample_name, i + 1, len(sample.config.directories),
+                    directory, xsec, config.luminosity, n_gen,
+                    lumi_weight, sub_sample.scale, total_scale,
+                )
+
+                sub_results = _process_single_sample(
+                    sub_sample, lumi_weight, regions, hists, config,
+                )
+
+                # Merge into accumulated results
+                if merged is None:
+                    merged = sub_results
+                else:
+                    for rn in sub_results:
+                        for hn in sub_results[rn]:
+                            merged[rn][hn] = merged[rn][hn] + sub_results[rn][hn]
+
+            # Store merged results under the sample name
+            for region_name in merged:
+                if region_name not in results:
+                    results[region_name] = {}
+                results[region_name][sample_name] = merged[region_name]
+                for hist_name, hdata in merged[region_name].items():
+                    logger.info(
+                        "  %s / %s / %s: merged integral = %.1f",
+                        sample_name, region_name, hist_name, hdata.integral,
+                    )
+
+        else:
+            # Single directory (or no lumi scaling) — process normally
+            lumi_weight = 1.0
+            if sample.config.lumi_scale:
+                lumi_weight, xsec, n_gen = sample.get_lumi_weight(config.luminosity)
+                total_scale = sample.scale * lumi_weight
+                logger.info(
+                    "Lumi weight for '%s':\n"
+                    "    cross_section  = %.4g\n"
+                    "    luminosity     = %.4g\n"
+                    "    n_generated    = %d\n"
+                    "    lumi_weight    = %.4g\n"
+                    "    sample scale   = %.4g\n"
+                    "    total scale    = %.4g",
+                    sample_name, xsec, config.luminosity, n_gen,
+                    lumi_weight, sample.scale, total_scale,
+                )
+
+            sub_results = _process_single_sample(
+                sample, lumi_weight, regions, hists, config,
             )
 
-        # Process each region
-        for region_name, region in regions.items():
-            if region_name not in results:
-                results[region_name] = {}
-
-            # Compute selection mask
-            mask = region.apply(data)
-
-            # Process each histogram
-            results[region_name][sample_name] = {}
-            for hist_name, hist_cfg in hists.items():
-                # Evaluate variable expression on masked data
-                values = safe_evaluate(hist_cfg.variable, data, mask=mask)
-
-                # Evaluate weight expression on masked data
-                weights = safe_evaluate(sample.weight_expr, data, mask=mask)
-
-                # Apply scale factor and luminosity weight
-                total_scale = sample.scale * lumi_weight
-                if total_scale != 1.0:
-                    weights = np.asarray(weights, dtype=float) * total_scale
-
-                # Handle scalar weight (e.g., "1.0")
-                if np.ndim(weights) == 0:
-                    weights = np.full_like(values, float(weights), dtype=float)
-
-                # Fill histogram
-                hdata = fill_histogram(
-                    values, weights,
-                    hist_cfg.bins, hist_cfg.x_min, hist_cfg.x_max,
-                )
-                results[region_name][sample_name][hist_name] = hdata
-
-                logger.info(
-                    "  %s / %s / %s: integral = %.1f",
-                    sample_name, region_name, hist_name, hdata.integral,
-                )
+            for region_name in sub_results:
+                if region_name not in results:
+                    results[region_name] = {}
+                results[region_name][sample_name] = sub_results[region_name]
 
     return results

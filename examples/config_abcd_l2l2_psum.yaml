@@ -1,0 +1,97 @@
+tree: "preselection"
+output_dir: "plots/abcd_l2l2_psum/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+
+aliases:
+  vertex_mass: "vertex./vertex.invM_"
+  vertex_z:    "vertex./vertex.pos_.fZ"
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v5/data
+    sample_type: data
+    label: "Data (2021)"
+    color: "black"
+
+# L2L2 base selection, binned in psum [GeV].
+# ABCD variable is min_y0; mass hypothesis is fixed at 65 MeV.
+# Windows pre-evaluated from L2L2 resolution at 65 MeV:
+#   sigma(65 MeV) = 0.0021272 - 0.0065*0.065 + 0.110*0.065^2 = 2.170 MeV
+#   hw  = 1.5 * sigma = 3.255 MeV
+#   gap = 0.5 * sigma = 1.085 MeV
+#   sw  = 6.5 * sigma = 14.11 MeV
+regions:
+  - name: psum_2p0_2p2
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 2.0) & (psum < 2.2)"
+    label: "$2.0 < p_{\\mathrm{sum}} < 2.2$ GeV"
+
+  - name: psum_2p2_2p4
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 2.2) & (psum < 2.4)"
+    label: "$2.2 < p_{\\mathrm{sum}} < 2.4$ GeV"
+
+  - name: psum_2p4_2p6
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 2.4) & (psum < 2.6)"
+    label: "$2.4 < p_{\\mathrm{sum}} < 2.6$ GeV"
+
+  - name: psum_2p6_2p8
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 2.6) & (psum < 2.8)"
+    label: "$2.6 < p_{\\mathrm{sum}} < 2.8$ GeV"
+
+  - name: psum_2p8_3p0
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 2.8) & (psum < 3.0)"
+    label: "$2.8 < p_{\\mathrm{sum}} < 3.0$ GeV"
+
+  - name: psum_3p0_3p2
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 3.0) & (psum < 3.2)"
+    label: "$3.0 < p_{\\mathrm{sum}} < 3.2$ GeV"
+
+  - name: psum_3p2_3p4
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 3.2) & (psum < 3.4)"
+    label: "$3.2 < p_{\\mathrm{sum}} < 3.4$ GeV"
+
+  - name: psum_3p4_3p6
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 3.4) & (psum < 3.6)"
+    label: "$3.4 < p_{\\mathrm{sum}} < 3.6$ GeV"
+
+  - name: psum_3p6_3p8
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 3.6) & (psum < 3.8)"
+    label: "$3.6 < p_{\\mathrm{sum}} < 3.8$ GeV"
+
+  - name: psum_3p8_4p0
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (vertex_z > 10) & (psum >= 3.8) & (psum < 4.0)"
+    label: "$3.8 < p_{\\mathrm{sum}} < 4.0$ GeV"
+
+plots:
+  - name: abcd_l2l2_psum
+    plot_type: abcd
+    samples: [data]
+    regions:
+      - psum_2p0_2p2
+      - psum_2p2_2p4
+      - psum_2p4_2p6
+      - psum_2p6_2p8
+      - psum_2p8_3p0
+      - psum_3p0_3p2
+      - psum_3p2_3p4
+      - psum_3p4_3p6
+      - psum_3p6_3p8
+      - psum_3p8_4p0
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      # Fixed mass hypothesis at 65 MeV (single evaluation point)
+      mass_scan_min:  0.065
+      mass_scan_max:  0.065
+      mass_scan_step: 0.003
+      # Windows pre-evaluated from L2L2 resolution at 65 MeV (see comment above)
+      mass_window_half_width: 0.003255
+      sideband_gap:           0.001085
+      sideband_width:         0.01411
+      # min_y0 regions [mm]: signal = displaced, control = prompt
+      z_signal_min:  0.2
+      z_signal_max: 100.0
+      z_control_min:  0.0
+      z_control_max:  0.2
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true

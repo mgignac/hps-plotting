@@ -26,6 +26,8 @@ FUNCTIONS = {
     "sin": np.sin,
     "cos": np.cos,
     "tan": np.tan,
+    "atan2": np.arctan2,
+    "arctan2": np.arctan2,
     "max": np.maximum,
     "min": np.minimum,
     "pow": np.power,

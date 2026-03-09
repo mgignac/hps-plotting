@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import yaml
 
@@ -10,17 +10,26 @@ import yaml
 @dataclass
 class SampleConfig:
     name: str
-    directory: str
-    sample_type: str  # "data", "background", "signal"
+    directory: Union[str, List[str]] = ""
+    sample_type: str = "background"  # "data", "background", "signal"
     label: str = ""
     color: str = "black"
     weight: str = "1.0"
     scale: float = 1.0
     lumi_scale: bool = False  # if True, compute weight from summary.json
     tree: str = ""  # per-sample override
+    selection: str = ""  # per-sample selection applied above region cuts
     rad_frac_role: str = ""  # "numerator" or "denominator" for radiative fraction
+    aliases: Dict[str, str] = field(default_factory=dict)  # per-sample alias overrides (merged over global aliases)
+    derive_smearing: bool = True  # if False, plot resolution but skip smearing derivation for this sample
+    show_scale: bool = False      # if True, include this sample in the scale correction panel
 
     def __post_init__(self):
+        # Normalize directory to a list
+        if isinstance(self.directory, str):
+            self.directories = [self.directory]
+        else:
+            self.directories = list(self.directory)
         if not self.label:
             self.label = self.name
         if self.sample_type not in ("data", "background", "signal"):
@@ -56,6 +65,80 @@ class HistogramConfig:
     x_label: str = ""
     y_label: str = "Events"
     log_y: bool = False
+    # Optional 2D fields — if y_variable is set, this is a 2D histogram
+    y_variable: str = ""
+    y_bins: int = 50
+    y_min: float = 0.0
+    y_max: float = 1.0
+    y_label_2d: str = ""  # y-axis label for 2D (y_label is repurposed as "Events" for 1D)
+    tool_variable_name: str = ""  # track variable name for TrackSmearingTool binned lookup (e.g. "tanLambda")
+
+
+@dataclass
+class FitConfig:
+    function: str = "exponential"  # only "exponential" for now
+    sample: Union[str, List[str]] = ""  # which sample(s) to fit
+    x_min: float = None            # fit range (defaults to histogram range)
+    x_max: float = None
+    p0: List[float] = field(default_factory=list)  # initial parameters [A, lambda]
+    color: str = "red"
+    show_params: bool = True       # display fit result text on plot
+
+    def __post_init__(self):
+        # Normalize sample to a list
+        if isinstance(self.sample, str):
+            self.samples = [self.sample] if self.sample else []
+        else:
+            self.samples = list(self.sample)
+
+
+@dataclass
+class SmearingConfig:
+    data_sample: str
+    mc_sample: str
+    smearing_type: str = "absolute"  # "absolute" or "relative"
+    fit_range: List[float] = field(default_factory=list)  # [min, max] for Y-axis Gaussian fit
+    sigma_range: float = 1.5         # iterative window half-width in sigmas (overridden when core_fraction is set)
+    core_fraction: Optional[float] = None  # if set, fit only the central fraction (e.g. 0.70); seeds window from percentiles
+    json_output: str = ""            # path for JSON output; empty = no JSON
+    top_region: str = ""             # region name for top-volume tracks
+    bot_region: str = ""             # region name for bot-volume tracks
+    tool_json_output: str = ""       # path for TrackSmearingTool-compatible JSON
+    tool_section: str = ""           # section name in tool JSON (e.g. "pSmearing", "omegaSmearing")
+    extra_samples: List[str] = field(default_factory=list)  # additional samples overlaid on fit plots (no smearing derived)
+    scale_panel: bool = True           # if False, suppress the scale correction panel entirely
+    scale_reference: Optional[float] = None  # None → divide by beam_energy (show μ/E_beam, line at 1);
+                                             # float → show μ directly, reference line at this value (e.g. 0.0 for z0)
+
+
+@dataclass
+class ABCDConfig:
+    mass_variable: str                      # expression for invariant mass
+    z_variable: str                         # expression for vertex Z position
+    mass_scan_min: float = 0.03             # GeV: start of mass scan
+    mass_scan_max: float = 0.20             # GeV: end of mass scan (inclusive)
+    mass_scan_step: float = 0.005           # GeV: step between mass bin centers
+    mass_window_half_width: float = 0.005   # GeV: signal window = center ± half_width
+    sideband_gap: float = 0.002             # GeV: gap from signal window edge to sideband
+    sideband_width: float = 0.010           # GeV: width of each sideband (low + high)
+    z_signal_min: float = 10.0              # mm: Z signal region lower bound
+    z_signal_max: float = 100.0             # mm: Z signal region upper bound
+    z_control_min: float = 2.0              # mm: Z control region lower bound
+    z_control_max: float = 5.0              # mm: Z control region upper bound
+    x_label: str = "$m_{e^+e^-}$ [GeV]"    # mass axis label
+    log_y: bool = True                      # log scale on the y-axis
+    show_mc_components: bool = False        # if True, draw individual MC process lines
+    # --- mass-dependent window sizing ---
+    # When mass_resolution contains an entry for the current region, the fixed
+    # mass_window_half_width / sideband_gap / sideband_width fields are replaced by:
+    #   SR half-width  = sr_sigmas  * sigma(m)
+    #   gap            = gap_sigmas * sigma(m)
+    #   sideband width = sb_sigmas  * sigma(m)
+    # where sigma(m) is evaluated from the expression string (variable: m in GeV).
+    sr_sigmas: float = 1.5                  # signal region half-width in units of sigma
+    gap_sigmas: float = 0.5                 # gap between SR edge and sideband, in sigma
+    sb_sigmas: float = 3.0                  # sideband width in units of sigma
+    mass_resolution: Dict[str, str] = field(default_factory=dict)  # region → sigma(m) expression
 
 
 @dataclass
@@ -71,14 +154,18 @@ class PlotConfig:
     normalize_to_data: bool = False
     background_fractions: Dict[str, float] = field(default_factory=dict)
     signal_fractions: Dict[str, float] = field(default_factory=dict)
+    output_dir: str = ""  # per-plot override; falls back to global output_dir
     ratio_y_min: float = 0.5
     ratio_y_max: float = 1.5
+    fit: Optional[FitConfig] = None
+    smearing: Optional[SmearingConfig] = None
+    abcd: Optional[ABCDConfig] = None
 
     def __post_init__(self):
-        if self.plot_type not in ("stack", "overlay", "rad_frac"):
+        if self.plot_type not in ("stack", "overlay", "rad_frac", "smearing", "abcd"):
             raise ValueError(
                 f"Invalid plot_type '{self.plot_type}' for plot '{self.name}'. "
-                "Must be 'stack', 'overlay', or 'rad_frac'."
+                "Must be 'stack', 'overlay', 'rad_frac', 'smearing', or 'abcd'."
             )
 
 
@@ -94,6 +181,7 @@ class Config:
     luminosity: float = 1.0
     lumi_file: str = ""
     aliases: Dict[str, str] = field(default_factory=dict)
+    beam_energy: Optional[float] = None  # beam energy in GeV; used for scale correction panel
 
 
 def load_config(path: str) -> Config:
@@ -108,6 +196,7 @@ def load_config(path: str) -> Config:
         luminosity=raw.get("luminosity", 1.0),
         lumi_file=raw.get("lumi_file", ""),
         aliases=raw.get("aliases", {}),
+        beam_energy=raw.get("beam_energy", None),
     )
 
     for s in raw.get("samples", []):
@@ -123,7 +212,17 @@ def load_config(path: str) -> Config:
         config.histograms.append(HistogramConfig(**h))
 
     for p in raw.get("plots", []):
-        config.plots.append(PlotConfig(**p))
+        fit_raw     = p.pop("fit", None)
+        smearing_raw = p.pop("smearing", None)
+        abcd_raw    = p.pop("abcd", None)
+        plot = PlotConfig(**p)
+        if fit_raw is not None:
+            plot.fit = FitConfig(**fit_raw)
+        if smearing_raw is not None:
+            plot.smearing = SmearingConfig(**smearing_raw)
+        if abcd_raw is not None:
+            plot.abcd = ABCDConfig(**abcd_raw)
+        config.plots.append(plot)
 
     # Auto-populate samples for rad_frac plots from rad_frac_role annotations
     rad_frac_samples = [s.name for s in config.samples if s.rad_frac_role]
