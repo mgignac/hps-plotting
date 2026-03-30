@@ -56,6 +56,42 @@ def parse_lumi_file(lumi_path):
     return run_lumi
 
 
+def _resolve_files(directory, run_min=None, run_max=None):
+    """Return a list of .root file paths from *directory*, optionally filtered by run number.
+
+    Handles directories, single .root files, and glob patterns (with ``*``).
+    When *run_min* and/or *run_max* are given, only files whose run number
+    (parsed from the filename via ``_RUN_RE``) falls within [run_min, run_max]
+    are included.  Files with no parseable run number are always included.
+    """
+    import glob as globmod
+
+    if "*" in str(directory):
+        candidates = sorted(globmod.glob(str(directory)))
+    else:
+        p = Path(directory)
+        if p.suffix == ".root":
+            candidates = [str(p)]
+        else:
+            candidates = sorted(str(f) for f in p.glob("*.root"))
+
+    if run_min is None and run_max is None:
+        return candidates
+
+    filtered = []
+    for fpath in candidates:
+        m = _RUN_RE.search(Path(fpath).name)
+        if m:
+            run = int(m.group(1))
+            if run_min is not None and run < run_min:
+                continue
+            if run_max is not None and run > run_max:
+                continue
+        filtered.append(fpath)
+
+    return filtered
+
+
 def _extract_runs_from_path(data_dir):
     """Extract unique run numbers from ROOT filenames in a path.
 
@@ -171,16 +207,42 @@ class Sample:
         aliases = aliases or {}
 
         # Build list of uproot patterns from all directories
+        run_min = self.config.run_min
+        run_max = self.config.run_max
+        needs_run_filter = run_min is not None or run_max is not None
+
         patterns = []
         for d in self.config.directories:
             p = Path(d)
-            if "*" in d:
-                # Glob pattern already specified by user
+            if needs_run_filter:
+                # Expand to individual files so we can filter by run number
+                files = _resolve_files(d, run_min=run_min, run_max=run_max)
+                if not files:
+                    logger.warning(
+                        "No files found for sample '%s' in '%s' after run filtering "
+                        "(run_min=%s, run_max=%s).",
+                        self.name, d, run_min, run_max,
+                    )
+                patterns.extend(f"{f}:{tree}" for f in files)
+            elif "*" in d:
                 patterns.append(f"{d}:{tree}")
             elif p.suffix == ".root":
                 patterns.append(f"{p}:{tree}")
             else:
                 patterns.append(f"{p}/*.root:{tree}")
+
+        if not patterns:
+            raise ValueError(
+                f"Sample '{self.name}': no ROOT files found after run filtering "
+                f"(run_min={run_min}, run_max={run_max})."
+            )
+
+        if needs_run_filter:
+            logger.info(
+                "Run filter applied to '%s': run_min=%s, run_max=%s → %d file(s)",
+                self.name, run_min, run_max, len(patterns),
+            )
+
         pattern = patterns if len(patterns) > 1 else patterns[0]
 
         branches = sorted(set(branches))
@@ -308,7 +370,8 @@ class Sample:
             else:
                 self._data[b] = ak.to_numpy(arrays[b])
 
-        logger.info("  Loaded %d events", len(next(iter(self._data.values()))))
+        if self._data:
+            logger.info("  Loaded %d events", len(next(iter(self._data.values()))))
         return self._data
 
     @property

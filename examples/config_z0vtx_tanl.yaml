@@ -1,0 +1,59 @@
+tree: "preselection"
+output_dir: "plots/z0vtx_tanl/"
+output_format: "pdf"
+
+# Aliases map short names to the split-path branch locations in the preselection tree
+aliases:
+  ele_z0:   "ele.track_.z0_"
+  ele_tanl: "ele.track_.tan_lambda_"
+  pos_z0:   "pos.track_.z0_"
+  pos_tanl: "pos.track_.tan_lambda_"
+  vtx_y:    "vertex./vertex.pos_.fY"
+
+samples:
+  - name: fixed
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_5pc/
+    sample_type: data
+    label: "Calibrated"
+    color: "firebrick"
+#    run_min: 14185
+#    run_max: 14190
+
+regions: []
+
+plots:
+  - name: ele_z0vtx_vs_tanl
+    plot_type: binned
+    samples: [fixed]
+    binned:
+      variable:     "ele_z0 - vtx_y"
+      bin_variable: "ele_tanl"
+      bin_edges: [-0.06, -0.05, -0.04, -0.03, -0.02, 0, 0.02, 0.03, 0.04, 0.05, 0.06]
+      bins:  80
+      x_min: -0.5
+      x_max:  0.5
+      x_label: "$z_0 - y_\\mathrm{vtx}$ [mm]"
+      bin_label: "\\tan\\lambda_{\\mathrm{ele}}"
+      label: "Electron"
+      normalize: true
+      selection: "abs(ele_tanl) > 0.02"
+      json_output: "plots/z0vtx_tanl_perrun/z0vtx_fits.json"
+      json_key_prefix: "ele"
+
+  - name: pos_z0vtx_vs_tanl
+    plot_type: binned
+    samples: [fixed]
+    binned:
+      variable:     "pos_z0 - vtx_y"
+      bin_variable: "pos_tanl"
+      bin_edges: [-0.06, -0.05, -0.04, -0.03, -0.02, 0, 0.02, 0.03, 0.04, 0.05, 0.06]
+      bins:  80
+      x_min: -0.5
+      x_max:  0.5
+      x_label: "$z_0 - y_\\mathrm{vtx}$ [mm]"
+      bin_label: "\\tan\\lambda_{\\mathrm{pos}}"
+      label: "Positron"
+      normalize: true
+      selection: "abs(pos_tanl) > 0.02"
+      json_output: "plots/z0vtx_tanl_perrun/z0vtx_fits.json"
+      json_key_prefix: "pos"

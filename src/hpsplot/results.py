@@ -9,6 +9,7 @@ from .config import Config, SampleConfig
 from .histogram import fill_histogram, fill_histogram_2d
 from .region import Region
 from .sample import Sample, compute_luminosity
+from .signal_scaling import compute_eq4_scale, count_data_in_window
 from .utils import safe_evaluate
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,10 @@ def process(config: Config):
     dict
         results[region_name][sample_name][hist_name] → HistogramData
     """
+    # Nothing to do if there are no histograms to fill
+    if not config.histograms:
+        return {}
+
     # Build lookup maps
     sample_map = {s.name: s for s in config.samples}
     region_map = {r.name: r for r in config.regions}
@@ -118,6 +123,49 @@ def process(config: Config):
         else:
             logger.warning("lumi_file set but no data sample found — using luminosity=%.4g",
                            config.luminosity)
+
+    # Apply Eq. 4 data-driven signal scaling if a scaling region is defined
+    scaling_region_cfg = next(
+        (r for r in config.regions if r.is_scaling_region), None
+    )
+    if scaling_region_cfg is not None:
+        data_cfg = next(
+            (s for s in config.samples if s.sample_type == "data"), None
+        )
+        mass_var = config.scaling_mass_variable
+        mass_hw = config.scaling_mass_window
+
+        if data_cfg is None:
+            logger.warning(
+                "Scaling region '%s' defined but no data sample found — skipping Eq. 4 scaling.",
+                scaling_region_cfg.name,
+            )
+        elif not mass_var:
+            logger.warning(
+                "Scaling region '%s' defined but scaling_mass_variable not set — skipping Eq. 4 scaling.",
+                scaling_region_cfg.name,
+            )
+        else:
+            # Count data once per unique ap_mass value to avoid reloading.
+            data_counts_cache = {}
+            for s in config.samples:
+                if s.sample_type == "signal" and s.ap_mass is not None:
+                    if s.ap_mass not in data_counts_cache:
+                        data_counts_cache[s.ap_mass] = count_data_in_window(
+                            data_cfg, scaling_region_cfg,
+                            mass_var, mass_hw, s.ap_mass, config.aliases,
+                        )
+                    scale = compute_eq4_scale(
+                        s, data_counts_cache[s.ap_mass],
+                        scaling_region_cfg, config.aliases,
+                        mass_hw, config.scaling_rad_frac,
+                    )
+                    logger.info(
+                        "Applying Eq. 4 scale %.4g to signal sample '%s' "
+                        "(was %.4g, now %.4g)",
+                        scale, s.name, s.scale, s.scale * scale,
+                    )
+                    s.scale *= scale
 
     # Determine which samples, regions, histograms are actually used by plots
     needed_samples = set()

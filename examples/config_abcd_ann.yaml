@@ -1,0 +1,102 @@
+tree: "preselection"
+output_dir: "plots/abcd_ann/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+
+# ANN scorer — loaded once; score available as 'ann_score' in all selections.
+# The model was trained on 105 MeV signal vs background (v9, pass5, run42).
+ann:
+  model_path:  rory/classifier_adv_2021_v9_pass5_run42QualCuts_105.pt
+  scaler_path: rory/scaler_2021_v9_pass5_run42_QualCuts_150.pkl
+  score_variable: ann_score
+
+aliases:
+  vertex_mass: "vertex./vertex.invM_"
+  vertex_z:    "vertex./vertex.pos_.fZ"
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc/
+    sample_type: data
+    label: "Data (2021, 1%)"
+    color: "black"
+    run_min: 14185
+    run_max: 14300
+
+# ABCD using ANN score as the second discriminating axis:
+#
+#   Region A (signal):  signal mass window  AND  high ANN score  (→ A' candidates)
+#   Region B (control): signal mass window  AND  low  ANN score  (→ background-like)
+#   Region C (sideband/signal):  sideband mass  AND  high ANN score
+#   Region D (sideband/control): sideband mass  AND  low  ANN score
+#
+# Background estimate: N_A(bkg) = N_B × N_C / N_D
+#
+# The method is valid as long as mass and ANN score are uncorrelated for
+# background events.  The control region is chosen far below the signal
+# threshold to minimise signal contamination.
+
+regions:
+  - name: L1L1
+    selection: "eleL1 & posL1 & eleL2 & posL2 & (psum > 1.0) & (psum<2.0) & (vertex_z>5.0)"
+    label: "L1L1"
+
+  - name: L2L2
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & (psum > 2.8)"
+    label: "L2L2"
+
+  - name: L3L3
+    selection: "(eleL1 == 0) & (posL1 == 0) & (eleL2 == 0) & (posL2 == 0) & eleL3 & posL3 & (psum > 2.8)"
+    label: "L3L3"
+
+  - name: L1L2
+    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (psum > 2.8)"
+    label: "L1L2"
+
+  - name: L2L3
+    selection: "((eleL1 == 0) & eleL2 & (posL1 == 0) & (posL2 == 0) & posL3) | ((posL1 == 0) & posL2 & (eleL1 == 0) & (eleL2 == 0) & eleL3) & (psum > 2.8)"
+    label: "L2L3"
+
+plots:
+  - name: abcd_ann
+    plot_type: abcd
+    samples: [data]
+    regions: [L1L1] #, L1L2, L2L2, L2L3, L3L3]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "ann_score"
+      # Mass scan: 30 – 200 MeV in 3 MeV steps
+      mass_scan_min:  0.03
+      mass_scan_max:  0.20
+      mass_scan_step: 0.003
+      # Fixed fallback windows
+      mass_window_half_width: 0.005
+      sideband_gap:   0.002
+      sideband_width: 0.010
+      # ANN score regions:
+      #   Signal region  — high score, signal-like:  [0.9, 1.0]
+      #   Control region — low score, bkg-like:      [0.0, 0.3]
+      # Adjust thresholds after inspecting the score distribution.
+      z_signal_min:  0.99
+      z_signal_max:  1.0
+      z_control_min: 0.8
+      z_control_max: 0.9
+      json_output: "plots/abcd_ann/results.json"
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true
+      # Mass-dependent window sizing (same resolution as vertex-z ABCD)
+      sr_sigmas:  1.5
+      gap_sigmas: 0.5
+      sb_sigmas:  6.5
+      mass_resolution:
+        L1L1:  "0.0025169 - 0.0133 * m + 0.137 * m**2"
+        L1L2:  "0.001802  - 0.0005 * m + 0.0872 * m**2"
+        L2L2:  "0.0021272 - 0.0065 * m + 0.110 * m**2"
+        L2L3:  "0.0037686 - 0.0289 * m + 0.203 * m**2"
+        L3L3:  "0.0024227 - 0.0057 * m + 0.150 * m**2"
+      # Luminosity projection to full dataset
+      lumi_projections:
+        - label: "100% projection"
+          color: "firebrick"
+          linestyle: "-."
+          scale_factor: 100.0

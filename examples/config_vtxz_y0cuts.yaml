@@ -1,0 +1,197 @@
+tree: "preselection"
+output_dir: "plots/vtxz_y0cuts/"
+output_format: "pdf"
+
+aliases:
+  vertex_z: "vertex./vertex.pos_.fZ"
+  ele_z0:   "ele.track_.z0_"
+  pos_z0:   "pos.track_.z0_"
+
+# Each sample is one (dataset, z0 cut) combination.
+# Uncalibrated: cool blues (lighter → darker = harder cut)
+# Calibrated:   warm reds  (lighter → darker = harder cut)
+
+samples:
+  # --- Uncalibrated, no cut (shared baseline for both plots) ---
+  - name: uncalib_nocut
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc/
+    sample_type: data
+    label: "Uncal, no cut"
+    color: "#9ecae1"
+    run_min: 14200
+    run_max: 14230
+
+  # --- Uncalibrated, electron z0 cuts ---
+  - name: uncalib_ele_cut150
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc/
+    sample_type: data
+    label: "Uncal, $|z_0^{e}| > 0.15$ mm"
+    color: "#6baed6"
+    selection: "abs(ele_z0) > 0.15"
+    run_min: 14200
+    run_max: 14230
+
+  - name: uncalib_ele_cut200
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc/
+    sample_type: data
+    label: "Uncal, $|z_0^{e}| > 0.20$ mm"
+    color: "#2171b5"
+    selection: "abs(ele_z0) > 0.20"
+    run_min: 14200
+    run_max: 14230
+
+  - name: uncalib_ele_cut500
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc/
+    sample_type: data
+    label: "Uncal, $|z_0^{e}| > 0.50$ mm"
+    color: "#08306b"
+    selection: "abs(ele_z0) > 0.50"
+    run_min: 14200
+    run_max: 14230
+
+  # --- Uncalibrated, positron z0 cuts ---
+  - name: uncalib_pos_cut150
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc/
+    sample_type: data
+    label: "Uncal, $|z_0^{p}| > 0.15$ mm"
+    color: "#6baed6"
+    selection: "abs(pos_z0) > 0.15"
+    run_min: 14200
+    run_max: 14230
+
+  - name: uncalib_pos_cut200
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc/
+    sample_type: data
+    label: "Uncal, $|z_0^{p}| > 0.20$ mm"
+    color: "#2171b5"
+    selection: "abs(pos_z0) > 0.20"
+    run_min: 14200
+    run_max: 14230
+
+  - name: uncalib_pos_cut500
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc/
+    sample_type: data
+    label: "Uncal, $|z_0^{p}| > 0.50$ mm"
+    color: "#08306b"
+    selection: "abs(pos_z0) > 0.50"
+    run_min: 14200
+    run_max: 14230
+
+  # --- Calibrated, no cut (shared baseline for both plots) ---
+  - name: calib_nocut
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Cal, no cut"
+    color: "#fc9272"
+    run_min: 14200
+    run_max: 14230
+
+  # --- Calibrated, electron z0 cuts ---
+  - name: calib_ele_cut150
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Cal, $|z_0^{e}| > 0.15$ mm"
+    color: "#fb6a4a"
+    selection: "abs(ele_z0) > 0.15"
+    run_min: 14200
+    run_max: 14230
+
+  - name: calib_ele_cut200
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Cal, $|z_0^{e}| > 0.20$ mm"
+    color: "#cb181d"
+    selection: "abs(ele_z0) > 0.20"
+    run_min: 14200
+    run_max: 14230
+
+  - name: calib_ele_cut500
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Cal, $|z_0^{e}| > 0.50$ mm"
+    color: "#67000d"
+    selection: "abs(ele_z0) > 0.50"
+    run_min: 14200
+    run_max: 14230
+
+  # --- Calibrated, positron z0 cuts ---
+  - name: calib_pos_cut150
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Cal, $|z_0^{p}| > 0.15$ mm"
+    color: "#fb6a4a"
+    selection: "abs(pos_z0) > 0.15"
+    run_min: 14200
+    run_max: 14230
+
+  - name: calib_pos_cut200
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Cal, $|z_0^{p}| > 0.20$ mm"
+    color: "#cb181d"
+    selection: "abs(pos_z0) > 0.20"
+    run_min: 14200
+    run_max: 14230
+
+  - name: calib_pos_cut500
+    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Cal, $|z_0^{p}| > 0.50$ mm"
+    color: "#67000d"
+    selection: "abs(pos_z0) > 0.50"
+    run_min: 14200
+    run_max: 14230
+
+regions:
+  - name: L1L1
+    selection: "eleL1 & posL1"
+    label: "L1L1"
+
+  - name: L2L2
+    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2"
+    label: "L2L2"
+
+  - name: L1L2
+    selection: "(eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)"
+    label: "L1L2"
+
+histograms:
+  - name: vertex_z
+    variable: "vertex_z"
+    bins: 65
+    x_min: -10.0
+    x_max:  55.0
+    x_label: "Vertex $z$ [mm]"
+    log_y: true
+    y_top_scale: 5.0
+
+plots:
+  - name: vtxz_ele_z0cuts
+    plot_type: overlay
+    normalize: true
+    histograms: [vertex_z]
+    regions: [L1L1, L2L2, L1L2]
+    samples:
+      - uncalib_nocut
+      - uncalib_ele_cut150
+      - uncalib_ele_cut200
+      - uncalib_ele_cut500
+      - calib_nocut
+      - calib_ele_cut150
+      - calib_ele_cut200
+      - calib_ele_cut500
+
+  - name: vtxz_pos_z0cuts
+    plot_type: overlay
+    normalize: true
+    histograms: [vertex_z]
+    regions: [L1L1, L2L2, L1L2]
+    samples:
+      - uncalib_nocut
+      - uncalib_pos_cut150
+      - uncalib_pos_cut200
+      - uncalib_pos_cut500
+      - calib_nocut
+      - calib_pos_cut150
+      - calib_pos_cut200
+      - calib_pos_cut500

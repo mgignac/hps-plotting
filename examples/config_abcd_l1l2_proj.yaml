@@ -1,5 +1,5 @@
 tree: "preselection"
-output_dir: "plots/abcd_l1l2_miny0_nocalibration/"
+output_dir: "plots/abcd_l1l2_proj/"
 output_format: "pdf"
 lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
 
@@ -9,55 +9,61 @@ aliases:
 
 samples:
   - name: data
-    #directory: /sdf/data/hps/physics2021/preselection/v7//data_1pc_z0_calb_run_by_run/
-    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc
+    directory: /sdf/data/hps/physics2021/preselection/v5/data
     sample_type: data
     label: "Data (2021)"
     color: "black"
-    run_min: 14200
-    run_max: 14230
 
 
 # L1L2 base selection (inclusive in vtx_z) plus vertex-z-sliced variants.
 # One track hits L1, the other hits L2 (but not L1) — symmetric OR.
+# All regions require min_y0 > 0 to guard against division by zero in z_variable.
+#
+# z_variable = (0.02/0.12 * m * (z - z_min(m))) / min_y0
+#   where z_min(m) = -0.7 + (1.4/0.12) * m
+# Signal region : ratio in [0, 1]  → expression < min_y0  (passes tight A' cut)
+# Control region: ratio in [-10, 0] → vertex upstream of z_min  (prompt-like)
 regions:
   - name: L1L2
-    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (psum > 2.8)"
+    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (min_y0 > 0)"
     label: "L1L2"
 
   - name: L1L2_z5
-    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (psum > 2.8) & (vertex_z >= 5)"
-    label: "L1L2"
+    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (min_y0 > 0) & (vertex_z >= 5)"
+    label: "L1L2, $z_{vtx} > 5$ mm"
 
   - name: L1L2_z5_10
-    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (psum > 2.8) & (vertex_z >= 5) & (vertex_z < 10)"
+    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (min_y0 > 0) & (vertex_z >= 5) & (vertex_z < 10)"
     label: "L1L2, $5 < z_{vtx} < 10$ mm"
 
   - name: L1L2_z10_15
-    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (psum > 2.8) & (vertex_z >= 10) & (vertex_z < 15)"
+    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (min_y0 > 0) & (vertex_z >= 10) & (vertex_z < 15)"
     label: "L1L2, $10 < z_{vtx} < 15$ mm"
 
   - name: L1L2_z15_20
-    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (psum > 2.8) & (vertex_z >= 15) & (vertex_z < 20)"
+    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (min_y0 > 0) & (vertex_z >= 15) & (vertex_z < 20)"
     label: "L1L2, $15 < z_{vtx} < 20$ mm"
 
   - name: L1L2_z20_30
-    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (psum > 2.8) & (vertex_z >= 20) & (vertex_z < 30)"
+    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (min_y0 > 0) & (vertex_z >= 20) & (vertex_z < 30)"
     label: "L1L2, $20 < z_{vtx} < 30$ mm"
 
   - name: L1L2_z30plus
-    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (psum > 2.8) & (vertex_z >= 30)"
+    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (min_y0 > 0) & (vertex_z >= 30)"
     label: "L1L2, $z_{vtx} > 30$ mm"
 
 plots:
-  - name: abcd_l1l2_miny0
+  - name: abcd_l1l2_proj
     plot_type: abcd
     samples: [data]
     regions: [L1L2, L1L2_z5, L1L2_z5_10, L1L2_z10_15, L1L2_z15_20, L1L2_z20_30, L1L2_z30plus]
     abcd:
       mass_variable: "vertex_mass"
-      z_variable:    "min_y0"
-      # Mass scan: 30 - 200 MeV in 1 MeV steps
+      # z_variable is the ratio: A' tight cut expression / min_y0
+      #   ratio < 1  → passes tight cut (expression < min_y0)
+      #   ratio < 0  → vertex upstream of z_min(m), prompt-like
+      z_variable: "(0.02/0.12 * vertex_mass * (vertex_z - (-0.7 + 1.4/0.12 * vertex_mass))) / min_y0"
+      # Mass scan: 30 - 200 MeV in 3 MeV steps
       mass_scan_min:  0.03
       mass_scan_max:  0.20
       mass_scan_step: 0.003
@@ -65,11 +71,11 @@ plots:
       mass_window_half_width: 0.005
       sideband_gap:   0.002
       sideband_width: 0.010
-      # min_y0 regions [mm]: signal = displaced, control = prompt
-      z_signal_min:  0.5
-      z_signal_max: 100.0
-      z_control_min:  0.1
-      z_control_max:  0.3
+      # Projection ratio regions: signal = passes tight cut, control = prompt-like
+      z_signal_min:   0.0
+      z_signal_max:   1.0
+      z_control_min: -10.0
+      z_control_max:  0.0
       x_label: "$m_{e^+e^-}$ [GeV]"
       log_y: true
       # --- mass-dependent window sizing ---

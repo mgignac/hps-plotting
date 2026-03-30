@@ -1,19 +1,26 @@
 """CLI entry point: python -m hpsplot config.yaml [-o output_dir] [-v]"""
 
 import argparse
+import copy
+import glob as globmod
 import logging
+import re
 import sys
 
 import json
 from pathlib import Path
 
+_RUN_RE = re.compile(r"_(\d{5,6})_")
+
 from .config import load_config
+from .utils import extract_branch_names
 from .plotting.style import set_hps_style
 from .plotting.stack import plot_stack
 from .plotting.overlay import plot_overlay
 from .plotting.rad_frac import plot_rad_frac
 from .plotting.smearing import plot_smearing, build_tool_json
-from .plotting.abcd import plot_abcd, plot_abcd_summary, plot_abcd_summary
+from .plotting.abcd import plot_abcd, plot_abcd_summary, plot_abcd_lumi_projections, write_abcd_json
+from .plotting.binned import plot_binned_comparison
 from .results import process
 
 
@@ -33,6 +40,9 @@ def main():
                         help="Force log y-axis on all histograms")
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Enable verbose logging")
+    parser.add_argument("--per-file", action="store_true",
+                        help="Run the full pipeline independently for each data file, "
+                             "writing output to per-run subdirectories")
     args = parser.parse_args()
 
     # Setup logging — only set our package to DEBUG, keep others at WARNING
@@ -97,6 +107,85 @@ def main():
     # Set style
     set_hps_style()
 
+    if args.per_file:
+        _run_per_file(config, args, logger)
+        return
+
+    _run_config(config, logger)
+
+
+def _enumerate_data_runs(data_cfg):
+    """Return (run_label, [filepaths]) pairs grouped by run number.
+
+    Multiple files sharing the same run number (e.g. different segments) are
+    collected into a single list so they are processed together.
+    Respects run_min / run_max on the sample config if set.
+    Files whose names contain no recognised run number are grouped under their stem.
+    """
+    run_min = data_cfg.run_min
+    run_max = data_cfg.run_max
+
+    runs = {}   # run_label → [fpath, ...]
+    for d in data_cfg.directories:
+        if "*" in d:
+            candidates = sorted(globmod.glob(d))
+        else:
+            p = Path(d)
+            candidates = [str(p)] if p.suffix == ".root" else sorted(str(f) for f in p.glob("*.root"))
+        for fpath in candidates:
+            m = _RUN_RE.search(Path(fpath).name)
+            if m:
+                run = int(m.group(1))
+                if run_min is not None and run < run_min:
+                    continue
+                if run_max is not None and run > run_max:
+                    continue
+                label = str(run)
+            else:
+                label = Path(fpath).stem
+            runs.setdefault(label, []).append(fpath)
+
+    # Return sorted by run label (numeric where possible)
+    def _sort_key(lbl):
+        try:
+            return (0, int(lbl))
+        except ValueError:
+            return (1, lbl)
+
+    return sorted(runs.items(), key=lambda kv: _sort_key(kv[0]))
+
+
+def _run_per_file(config, args, logger):
+    """Run the full pipeline once per run, grouping all files that share a run number."""
+    data_cfg = next((s for s in config.samples if s.sample_type == "data"), None)
+    if data_cfg is None:
+        logger.error("--per-file requires a data sample.")
+        sys.exit(1)
+
+    runs = _enumerate_data_runs(data_cfg)
+    logger.info("--per-file: %d run(s) found.", len(runs))
+
+    base_output = args.output_dir or config.output_dir
+
+    for run_label, fpaths in runs:
+        logger.info("--- per-run: %s (%d file(s)) ---", run_label, len(fpaths))
+        cfg = copy.deepcopy(config)
+
+        # Point only the enumerated data sample at this run's files.
+        # Other samples (MC, additional data) keep their original paths.
+        for s in cfg.samples:
+            if s.name == data_cfg.name:
+                s.directories = fpaths
+                s.run_min = None
+                s.run_max = None
+
+        cfg.output_dir = str(Path(base_output) / f"run_{run_label}")
+        cfg.run_label = run_label
+        _run_config(cfg, logger)
+
+
+def _run_config(config, logger):
+    """Process one config end-to-end: fill histograms and generate all plots."""
     # Process: fill all histograms
     logger.info("Processing samples...")
     results = process(config)
@@ -106,6 +195,16 @@ def main():
     region_map = {r.name: r for r in config.regions}
     hist_map = {h.name: h for h in config.histograms}
 
+    # Load ANN model once if configured
+    ann_scorer = None
+    if config.ann is not None:
+        from .ann_classifier import load_ann
+        ann_model, ann_mean, ann_scale = load_ann(
+            config.ann.model_path, config.ann.scaler_path
+        )
+        ann_scorer = (ann_model, ann_mean, ann_scale, config.ann.score_variable)
+        logger.info("ANN scorer loaded: score_variable='%s'", config.ann.score_variable)
+
     # Generate plots
     logger.info("Generating plots...")
     for plot_cfg in config.plots:
@@ -113,7 +212,17 @@ def main():
         # ABCD plots load their own data and don't use the histogram pipeline
         if plot_cfg.plot_type == "abcd":
             outdir = plot_cfg.output_dir or config.output_dir
+
+            # Collect branches needed by every region so each sample is loaded
+            # once (with all needed branches) and reused across region calls.
+            all_region_branches = set()
+            for rn in plot_cfg.regions:
+                rc = region_map.get(rn)
+                if rc:
+                    all_region_branches |= extract_branch_names(rc.selection)
+
             counts_cache = {}
+            data_cache = {}  # sample_name → raw arrays; shared across regions
             for region_name in plot_cfg.regions:
                 region_cfg = region_map.get(region_name)
                 if region_cfg is None:
@@ -122,9 +231,35 @@ def main():
                 counts_cache[region_name] = plot_abcd(
                     plot_cfg, region_cfg, config, samples_map,
                     outdir, config.output_format,
+                    ann_scorer=ann_scorer,
+                    data_cache=data_cache,
+                    all_region_branches=all_region_branches,
                 )
             plot_abcd_summary(plot_cfg, config, samples_map, outdir, config.output_format,
-                              counts_cache=counts_cache)
+                              counts_cache=counts_cache, ann_scorer=ann_scorer)
+            if plot_cfg.abcd.lumi_projections:
+                plot_abcd_lumi_projections(plot_cfg, config, samples_map, outdir,
+                                           config.output_format, counts_cache=counts_cache,
+                                           ann_scorer=ann_scorer)
+            if plot_cfg.abcd.json_output:
+                write_abcd_json(plot_cfg, config, samples_map, counts_cache,
+                                plot_cfg.abcd.json_output)
+            continue
+
+        # Binned comparison plots iterate over regions but not histograms
+        if plot_cfg.plot_type == "binned":
+            outdir = plot_cfg.output_dir or config.output_dir
+            if not plot_cfg.regions:
+                plot_binned_comparison(plot_cfg, None, config, samples_map,
+                                       outdir, config.output_format)
+            else:
+                for region_name in plot_cfg.regions:
+                    region_cfg = region_map.get(region_name)
+                    if region_cfg is None:
+                        logger.warning("Region '%s' not found, skipping.", region_name)
+                        continue
+                    plot_binned_comparison(plot_cfg, region_cfg, config, samples_map,
+                                           outdir, config.output_format)
             continue
 
         smearing_results = {}  # accumulated per smearing plot for JSON output

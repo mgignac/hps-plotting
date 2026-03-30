@@ -78,6 +78,9 @@ def plot_overlay(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_di
     else:
         ax.set_ylim(bottom=0)
 
+    if hist_cfg.y_top_scale != 1.0:
+        ax.set_ylim(top=ax.get_ylim()[1] * hist_cfg.y_top_scale)
+
     # Fit overlay
     if plot_cfg.fit is not None:
         fit_cfg = plot_cfg.fit

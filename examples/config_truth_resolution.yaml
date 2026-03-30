@@ -93,9 +93,9 @@ histograms:
   # 2D: delta_p vs true momentum — main resolution study
   - name: ele_dp_vs_truth_p
     variable: "sqrt(ele_truth_px**2 + ele_truth_py**2 + ele_truth_pz**2)"
-    bins: 12
+    bins: 11
     x_min: 0.5
-    x_max: 3.5
+    x_max: 3.0
     x_label: "$p^{\\rm true}_{e^-}$ [GeV]"
     y_variable: "sqrt(ele_px**2 + ele_py**2 + ele_pz**2) - sqrt(ele_truth_px**2 + ele_truth_py**2 + ele_truth_pz**2)"
     y_bins: 80
