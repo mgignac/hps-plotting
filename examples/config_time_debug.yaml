@@ -1,0 +1,105 @@
+tree: "preselection"
+output_dir: "plots/time-debugging/"
+output_format: "pdf"
+
+aliases:
+  ele_track_time: "ele./ele.track_/ele.track_.track_time_"
+  pos_track_time: "pos./pos.track_/pos.track_.track_time_"
+  ele_clus_time:  "ele./ele.cluster_/ele.cluster_.time_"
+  pos_clus_time:  "pos./pos.cluster_/pos.cluster_.time_"
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_5pc
+    sample_type: data
+    label: "Data (2021, 5%)"
+    color: "black"
+    run_min : 14423
+
+regions:
+  - name: loose
+    selection: ""
+    label: "Loose"
+
+
+histograms:
+  # Track times
+  - name: ele_track_time
+    variable: ele_track_time
+    bins: 100
+    x_min: -20.0
+    x_max:  20.0
+    x_label: "Track time ($e^-$) [ns]"
+
+  - name: pos_track_time
+    variable: pos_track_time
+    bins: 100
+    x_min: -20.0
+    x_max:  20.0
+    x_label: "Track time ($e^+$) [ns]"
+
+  - name: track_dt
+    variable: "ele_track_time - pos_track_time"
+    bins: 100
+    x_min: -20.0
+    x_max:  20.0
+    x_label: "$t_{trk}^{e^-} - t_{trk}^{e^+}$ [ns]"
+
+  # Cluster times
+  - name: ele_clus_time
+    variable: ele_clus_time
+    bins: 100
+    x_min: -60.0
+    x_max:  60.0
+    x_label: "Cluster time ($e^-$) [ns]"
+    log_y: true
+
+  - name: pos_clus_time
+    variable: pos_clus_time
+    bins: 100
+    x_min: -60.0
+    x_max:  60.0
+    x_label: "Cluster time ($e^+$) [ns]"
+    log_y: true
+
+  - name: clus_dt
+    variable: "ele_clus_time - pos_clus_time"
+    bins: 100
+    x_min: -20.0
+    x_max:  20.0
+    x_label: "$t_{clus}^{e^-} - t_{clus}^{e^+}$ [ns]"
+    log_y: true
+
+  # Track-cluster time differences (timing alignment check)
+  - name: ele_trk_clus_dt
+    variable: "ele_track_time - ele_clus_time"
+    bins: 100
+    x_min: -60.0
+    x_max:  60.0
+    x_label: "$t_{trk}^{e^-} - t_{clus}^{e^-}$ [ns]"
+    log_y: true
+
+  - name: pos_trk_clus_dt
+    variable: "pos_track_time - pos_clus_time"
+    bins: 100
+    x_min: -60.0
+    x_max:  60.0
+    x_label: "$t_{trk}^{e^+} - t_{clus}^{e^+}$ [ns]"
+    log_y: true
+
+plots:
+  - name: time_loose
+    plot_type: stack
+    histograms:
+      - ele_track_time
+      - pos_track_time
+      - track_dt
+      - ele_clus_time
+      - pos_clus_time
+      - clus_dt
+      - ele_trk_clus_dt
+      - pos_trk_clus_dt
+    regions: [loose]
+    samples: [data]
+    data_sample: data
+

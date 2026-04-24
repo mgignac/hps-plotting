@@ -32,6 +32,8 @@ class Region:
         numpy.ndarray
             Boolean mask where True means the event passes selection.
         """
+        if not self.selection:
+            return np.ones(len(next(iter(data.values()))), dtype=bool)
         logger.debug("Applying region '%s': %s", self.name, self.selection)
         mask = safe_evaluate(self.selection, data)
         mask = np.asarray(mask, dtype=bool)

@@ -27,6 +27,7 @@ class SampleConfig:
     epsilon_sq: Optional[float] = None  # ε² coupling; required alongside ap_mass
     run_min: Optional[int] = None      # inclusive lower bound on run number (data only)
     run_max: Optional[int] = None      # inclusive upper bound on run number (data only)
+    exclude_runs: List[int] = field(default_factory=list)  # run numbers to skip entirely
 
     def __post_init__(self):
         # Normalize directory to a list
@@ -170,6 +171,20 @@ class LumiProjectionConfig:
 
 
 @dataclass
+class ABCDAuxConfig:
+    """One aux-variable histogram produced alongside an ABCD plot.
+
+    Regions in the parent plot are treated as base regions.  For each bin of
+    *bins* the system synthesises a child RegionConfig that appends
+    ``(variable >= lo) & (variable < hi)`` to the base selection, runs the
+    ABCD machinery, and integrates the result into a single histogram bin.
+    """
+    variable: str                           # expression for the aux variable (e.g. "psum")
+    bins: List[float] = field(default_factory=list)  # bin edges (N+1 values for N bins)
+    label: str = ""                         # x-axis label for the histogram
+
+
+@dataclass
 class ABCDConfig:
     mass_variable: str                      # expression for invariant mass
     z_variable: str                         # expression for vertex Z position
@@ -199,6 +214,10 @@ class ABCDConfig:
     mass_resolution: Dict[str, str] = field(default_factory=dict)  # region → sigma(m) expression
     lumi_projections: List[LumiProjectionConfig] = field(default_factory=list)
     json_output: str = ""  # path to write per-mass-bin results JSON; empty = no output
+    # --- aux variable histograms ---
+    # Each entry auto-generates disjoint per-bin regions from the base regions in
+    # the plot and produces a histogram of integrated ABCD / data / MC vs that variable.
+    aux_histograms: List["ABCDAuxConfig"] = field(default_factory=list)
 
 
 @dataclass
@@ -223,10 +242,10 @@ class PlotConfig:
     binned: Optional[BinnedConfig] = None
 
     def __post_init__(self):
-        if self.plot_type not in ("stack", "overlay", "rad_frac", "smearing", "abcd", "binned"):
+        if self.plot_type not in ("stack", "overlay", "rad_frac", "smearing", "abcd", "binned", "run_trend"):
             raise ValueError(
                 f"Invalid plot_type '{self.plot_type}' for plot '{self.name}'. "
-                "Must be 'stack', 'overlay', 'rad_frac', 'smearing', or 'abcd'."
+                "Must be 'stack', 'overlay', 'rad_frac', 'smearing', 'abcd', 'binned', or 'run_trend'."
             )
 
 
@@ -248,6 +267,9 @@ class Config:
     scaling_rad_frac: float = 0.05       # f_rad: radiative fraction of background (Eq. 4)
     ann: Optional["ANNConfig"] = None    # ANN scorer config; if set, ann_score available in selections
     run_label: str = ""                  # set automatically by --per-file; used to key JSON outputs
+    hit_cat_file: str = ""               # path to hit-category fraction table (run L1L1 L1L2 L2L1 L2L2 Other)
+    hit_cat_ref_run: int = 0             # reference run for hit-category SF (SF = frac(run)/frac(ref))
+    hit_cat_poly_order: int = -1         # degree of polynomial SF fit; -1 = use closest-run lookup
 
 
 def load_config(path: str) -> Config:
@@ -268,6 +290,9 @@ def load_config(path: str) -> Config:
         scaling_mass_window=raw.get("scaling_mass_window", 0.005),
         scaling_rad_frac=raw.get("scaling_rad_frac", 0.05),
         ann=ANNConfig(**ann_raw) if ann_raw is not None else None,
+        hit_cat_file=raw.get("hit_cat_file", ""),
+        hit_cat_ref_run=raw.get("hit_cat_ref_run", 0),
+        hit_cat_poly_order=raw.get("hit_cat_poly_order", -1),
     )
 
     for s in raw.get("samples", []):
@@ -296,9 +321,12 @@ def load_config(path: str) -> Config:
             plot.binned = BinnedConfig(**binned_raw)
         if abcd_raw is not None:
             lumi_proj_raw = abcd_raw.pop("lumi_projections", [])
+            aux_hist_raw  = abcd_raw.pop("aux_histograms", [])
             plot.abcd = ABCDConfig(**abcd_raw)
             for lp in lumi_proj_raw:
                 plot.abcd.lumi_projections.append(LumiProjectionConfig(**lp))
+            for ah in aux_hist_raw:
+                plot.abcd.aux_histograms.append(ABCDAuxConfig(**ah))
         config.plots.append(plot)
 
     # Auto-populate samples for rad_frac plots from rad_frac_role annotations

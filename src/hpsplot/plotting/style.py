@@ -63,7 +63,7 @@ def set_hps_style():
 
 
 def add_hps_label(ax, label="HPS", sublabel="Internal", x=0.05, y=0.95,
-                  lumi=None, extra_lines=None):
+                  lumi=None, extra_lines=None, run_label=""):
     """Add the HPS experiment label to a plot axis.
 
     Parameters
@@ -100,7 +100,10 @@ def add_hps_label(ax, label="HPS", sublabel="Internal", x=0.05, y=0.95,
             verticalalignment="top",
         )
         y_cursor -= 0.07
-    for line in (extra_lines or []):
+    all_extra = list(extra_lines or [])
+    if run_label:
+        all_extra.append(f"Run {run_label}")
+    for line in all_extra:
         ax.text(
             x, y_cursor,
             line,

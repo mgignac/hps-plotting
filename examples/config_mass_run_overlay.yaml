@@ -1,0 +1,60 @@
+tree: "preselection"
+output_dir: "plots/mass_run_overlay/"
+output_format: "pdf"
+
+aliases:
+  vtx_invM: "vertex./vertex.invM_"
+
+samples:
+  - name: run_14200
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_5pc/
+    sample_type: data
+    label: "Run 14200"
+    color: "#3498db"
+    run_min: 14200
+    run_max: 14200
+
+  - name: run_14750
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_5pc/
+    sample_type: data
+    label: "Run 14750"
+    color: "#2ecc71"
+    run_min: 14750
+    run_max: 14750
+
+  - name: run_14577_14579
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_5pc/
+    sample_type: data
+    label: "Runs 14577-14579"
+    color: "#e74c3c"
+    run_min: 14577
+    run_max: 14579
+
+  - name: run_14608_14612
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_5pc/
+    sample_type: data
+    label: "Runs 14608-14612"
+    color: "#e67e22"
+    run_min: 14608
+    run_max: 14612
+
+regions:
+  - name: inclusive
+    selection: ""
+    label: "Inclusive"
+
+histograms:
+  - name: vtx_mass
+    variable: vtx_invM
+    bins: 100
+    x_min: 0.0
+    x_max: 0.2
+    x_label: "$m_{vtx}$ [GeV]"
+
+plots:
+  - name: mass_by_run
+    plot_type: overlay
+    histograms: [vtx_mass]
+    regions: [inclusive]
+    samples: [run_14200, run_14750, run_14577_14579, run_14608_14612]
+    normalize: true

@@ -1,0 +1,240 @@
+tree: "preselection"
+output_dir: "plots/abcd_ap/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+
+aliases:
+  vertex_mass: "vertex./vertex.invM_"
+  vertex_z:    "vertex./vertex.pos_.fZ"
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Data (2021, 1%)"
+    color: "black"
+#    run_min: 14450
+#    run_max: 14500
+
+  - name: tritrig
+    directory: /sdf/data/hps/physics2021/preselection/v8/tritrig_smeared
+    sample_type: background
+    label: "Tritrig"
+    color: "#4c72b0"
+    weight: "weight"
+    lumi_scale: true
+
+  - name: wab
+    directory: /sdf/data/hps/physics2021/preselection/v8/wab_smeared
+    sample_type: background
+    label: "WAB"
+    color: "#dd8452"
+    weight: "weight"
+    lumi_scale: true
+
+# Hit-layer scenarios become regions.
+# Negation is expressed as == 0 (no tilde/exclamation operators).
+regions:
+  - name: L1L1
+    selection: "isL1L1 & (psum>2.8) & (vtx_proj_sig < 2.0)"
+    label: "L1L1"
+
+  - name: L2L2
+    selection: "isL2L2 & (psum>2.8) & (vtx_proj_sig < 2.0)"
+    label: "L2L2"
+
+  - name: L3L3
+    selection: "isL3L3 & (psum>2.8) & (vtx_proj_sig < 2.0)"
+    label: "L3L3"
+
+  - name: L1L2
+    selection: "isL1L2 & (psum>2.8) & (vtx_proj_sig < 2.0)"
+    label: "L1L2"
+
+  - name: L2L3
+    selection: "isL2L3 & (psum>2.8) & (vtx_proj_sig < 2.0)"
+    label: "L2L3"
+
+  # Signal-region duplicates: same preselection + ABCD z_signal cut (min_y0 > 0.2 mm)
+  - name: L1L1_sr
+    selection: "isL1L1 & (psum>2.8) & (vtx_proj_sig < 2.0) & (min_y0 > 0.2)"
+    label: "L1L1 SR"
+
+  - name: L2L2_sr
+    selection: "isL2L2 & (psum>2.8) & (vtx_proj_sig < 2.0) & (min_y0 > 0.2)"
+    label: "L2L2 SR"
+
+  - name: L3L3_sr
+    selection: "isL3L3 & (psum>2.8) & (vtx_proj_sig < 2.0) & (min_y0 > 0.2)"
+    label: "L3L3 SR"
+
+  - name: L1L2_sr
+    selection: "isL1L2 & (psum>2.8) & (vtx_proj_sig < 2.0) & (min_y0 > 0.2)"
+    label: "L1L2 SR"
+
+  - name: L2L3_sr
+    selection: "isL2L3 & (psum>2.8) & (vtx_proj_sig < 2.0) & (min_y0 > 0.2)"
+    label: "L2L3 SR"
+
+histograms:
+  - name: mass
+    variable: "vertex_mass"
+    bins: 60
+    x_min: 0.02
+    x_max: 0.22 
+    x_label: "$m_{e^+e^-}$ [GeV]"
+
+  - name: min_y0
+    variable: "min_y0"
+    bins: 80
+    x_min: 0.0
+    x_max: 2.0
+    x_label: "$\\min|y_0|$ [mm]"
+
+  - name: psum
+    variable: "psum"
+    bins: 60
+    x_min: 2.6
+    x_max: 4.5
+    x_label: "$p_{\\mathrm{sum}}$ [GeV]"
+
+  - name: vtx_proj_sig
+    variable: "vtx_proj_sig"
+    bins: 50
+    x_min: 0.0
+    x_max: 2.0
+    x_label: "Vertex projection significance"
+
+  - name: vertex_z
+    variable: "vertex_z"
+    bins: 80
+    x_min: -50.0
+    x_max: 50.0
+    x_label: "Vertex $z$ [mm]"
+
+plots:
+  - name: abcd
+    plot_type: abcd
+    samples: [data]
+    regions: [L1L1, L2L2, L3L3, L1L2, L2L3]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      # Mass scan: 30 – 200 MeV in 1 MeV steps
+      mass_scan_min:  0.030
+      mass_scan_max:  0.250
+      mass_scan_step: 0.003
+      # Fixed fallback windows (used for any region not listed in mass_resolution)
+      mass_window_half_width: 0.005
+      sideband_gap:   0.002
+      sideband_width: 0.010
+      # Z regions [mm]
+      z_signal_min:  0.2
+      z_signal_max: 1000000000.0
+      z_control_min: 0.0
+      z_control_max: 0.2
+      json_output: "plots/abcd_ap/results.json"
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true
+      # --- mass-dependent window sizing ---
+      # SR half-width = sr_sigmas * sigma(m), sideband = sb_sigmas * sigma(m),
+      # gap = gap_sigmas * sigma(m).  Expressions are functions of m [GeV].
+      # Pol2 fits from smeared MC: sigma(GeV) = p0/1000 + p1*m + p2*1000*m**2
+      # (original fit: sigma[MeV] = p0 + p1*m[MeV] + p2*m[MeV]**2)
+      sr_sigmas:  1.5
+      gap_sigmas: 0.5
+      sb_sigmas:  3.5
+      mass_resolution:
+        # L1 hit: p0=2.5169, p1=-0.0133, p2=1.37e-4  (chi2/ndf=2.3/7)
+        L1L1:      "0.0025169 - 0.0133 * m + 0.137 * m**2"
+        # L1+L2 cross: p0=1.8020, p1=-0.0005, p2=8.72e-5  (chi2/ndf=7.1/7)
+        L1L2:      "0.001802 - 0.0005 * m + 0.0872 * m**2"
+        # L2 hit (no L1): p0=2.1272, p1=-0.0065, p2=1.10e-4  (chi2/ndf=4.2/7)
+        L2L2:      "0.0021272 - 0.0065 * m + 0.110 * m**2"
+        # L2+L3 cross: p0=3.7686, p1=-0.0289, p2=2.03e-4  (chi2/ndf=19.5/7)
+        L2L3:      "0.0037686 - 0.0289 * m + 0.203 * m**2"
+        # L3 hit (no L1/L2): p0=2.4227, p1=-0.0057, p2=1.50e-4  (chi2/ndf=33.8/7)
+        L3L3:      "0.0024227 - 0.0057 * m + 0.150 * m**2"
+      # --- luminosity projections ---
+      # Validate: scale 1% ABCD estimate → 5% lumi and compare against observed 5% data.
+      # Project: scale to 100% (no observed data available yet).
+      lumi_projections:
+        - label: "10% dataset"
+          color: "royalblue"
+          linestyle: "--"
+          scale_factor: 10.0
+
+        - label: "100% projection"
+          color: "firebrick"
+          linestyle: "-."
+          scale_factor: 100.0
+
+  - name: stack_L1L1
+    plot_type: stack
+    histograms: [mass, min_y0, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L1L1]
+
+  - name: stack_L2L2
+    plot_type: stack
+    histograms: [mass, min_y0, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L2L2]
+
+  - name: stack_L3L3
+    plot_type: stack
+    histograms: [mass, min_y0, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L3L3]
+
+  - name: stack_L1L2
+    plot_type: stack
+    histograms: [mass, min_y0, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L1L2]
+
+  - name: stack_L2L3
+    plot_type: stack
+    histograms: [mass, min_y0, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L2L3]
+
+  - name: stack_L1L1_sr
+    plot_type: stack
+    histograms: [mass, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L1L1_sr]
+
+  - name: stack_L2L2_sr
+    plot_type: stack
+    histograms: [mass, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L2L2_sr]
+
+  - name: stack_L3L3_sr
+    plot_type: stack
+    histograms: [mass, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L3L3_sr]
+
+  - name: stack_L1L2_sr
+    plot_type: stack
+    histograms: [mass, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L1L2_sr]
+
+  - name: stack_L2L3_sr
+    plot_type: stack
+    histograms: [mass, psum, vtx_proj_sig, vertex_z]
+    samples: [data]
+    data_sample: data
+    regions: [L2L3_sr]

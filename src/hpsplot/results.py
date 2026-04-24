@@ -102,6 +102,23 @@ def process(config: Config):
     dict
         results[region_name][sample_name][hist_name] → HistogramData
     """
+    # Compute luminosity from data files + lumi file if configured.
+    # Done before the histograms guard so ABCD-only configs also get the
+    # correct luminosity on their canvas labels.
+    if config.lumi_file:
+        data_sample = next(
+            (s for s in config.samples if s.sample_type == "data"), None
+        )
+        if data_sample:
+            config.luminosity = compute_luminosity(
+                data_sample.directories, config.lumi_file,
+                run_min=data_sample.run_min, run_max=data_sample.run_max,
+                exclude_runs=data_sample.exclude_runs,
+            )
+        else:
+            logger.warning("lumi_file set but no data sample found — using luminosity=%.4g",
+                           config.luminosity)
+
     # Nothing to do if there are no histograms to fill
     if not config.histograms:
         return {}
@@ -110,19 +127,6 @@ def process(config: Config):
     sample_map = {s.name: s for s in config.samples}
     region_map = {r.name: r for r in config.regions}
     hist_map = {h.name: h for h in config.histograms}
-
-    # Compute luminosity from data files + lumi file if configured
-    if config.lumi_file:
-        data_sample = next(
-            (s for s in config.samples if s.sample_type == "data"), None
-        )
-        if data_sample:
-            config.luminosity = compute_luminosity(
-                data_sample.directories, config.lumi_file
-            )
-        else:
-            logger.warning("lumi_file set but no data sample found — using luminosity=%.4g",
-                           config.luminosity)
 
     # Apply Eq. 4 data-driven signal scaling if a scaling region is defined
     scaling_region_cfg = next(
@@ -189,7 +193,8 @@ def process(config: Config):
     samples = {}
     for name in needed_samples:
         if name not in sample_map:
-            raise ValueError(f"Sample '{name}' referenced in plot but not defined.")
+            logger.debug("Sample '%s' referenced in plot but not in current sample set — skipping.", name)
+            continue
         samples[name] = Sample(sample_map[name])
 
     regions = {}

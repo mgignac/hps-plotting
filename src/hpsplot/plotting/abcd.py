@@ -13,6 +13,7 @@ Regions (defined per mass center):
 import copy
 import json
 import logging
+import re as _re
 from math import sqrt
 from pathlib import Path
 
@@ -53,6 +54,12 @@ def _compute_window(abcd_cfg, region_name, mass_center):
     Otherwise the fixed abcd_cfg fields are used.
     """
     res_expr = abcd_cfg.mass_resolution.get(region_name)
+    # For auto-generated aux bin regions (name contains __auxvar__) fall back to
+    # the base region's mass resolution entry.
+    if not res_expr:
+        m = _re.match(r'^(.+)__auxvar__.*$', region_name)
+        if m:
+            res_expr = abcd_cfg.mass_resolution.get(m.group(1))
     if not res_expr:
         return (abcd_cfg.mass_window_half_width,
                 abcd_cfg.sideband_gap,
@@ -215,8 +222,37 @@ def _count_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg):
         nc[i]            = c["C"][0]
         nd[i]            = c["D"][0]
 
-    logger.info("Counted %s / %s: %.1f events in signal region A",
-                region.name, region.name, na.sum())
+        if nd[i] > 0:
+            est = nb[i] * nc[i] / nd[i]
+        else:
+            est = 0.0
+        logger.debug(
+            "  [%s | m=%.1f MeV]  "
+            "A (sig): mass [%.4f, %.4f], z [%.2f, %.2f]  "
+            "B (z-ctrl): mass [%.4f, %.4f], z [%.2f, %.2f]  "
+            "C (sb-sig): mass [%.4f,%.4f]|[%.4f,%.4f], z [%.2f, %.2f]  "
+            "D (sb-ctrl): same mass as C, z [%.2f, %.2f]  |  "
+            "N_A=%g  N_B=%g  N_C=%g  N_D=%g  "
+            "est = N_B*N_C/N_D = %g",
+            region.name, mc * 1000,
+            # A
+            mc - hw, mc + hw,
+            abcd_cfg.z_signal_min, abcd_cfg.z_signal_max,
+            # B
+            mc - hw, mc + hw,
+            abcd_cfg.z_control_min, abcd_cfg.z_control_max,
+            # C
+            mc - hw - gap - sw, mc - hw - gap,
+            mc + hw + gap,       mc + hw + gap + sw,
+            abcd_cfg.z_signal_min, abcd_cfg.z_signal_max,
+            # D
+            abcd_cfg.z_control_min, abcd_cfg.z_control_max,
+            # counts
+            na[i], nb[i], nc[i], nd[i], est,
+        )
+
+    logger.info("Counted %s: N_A=%.1f  (total over %d mass bins)",
+                region.name, na.sum(), n)
     return {"na": na, "na_err": na_err, "nb": nb, "nc": nc, "nd": nd}
 
 
@@ -376,7 +412,7 @@ def plot_abcd_summary(plot_cfg, config, samples_map, output_dir, output_format,
         sharex=True,
     )
     fig.subplots_adjust(hspace=0.05)
-    add_hps_label(ax, lumi=config.luminosity)
+    add_hps_label(ax, lumi=config.luminosity, run_label=config.run_label)
 
     obs_vals  = np.array(obs_vals)
     obs_errs  = np.array(obs_errs)
@@ -471,6 +507,46 @@ def plot_abcd(plot_cfg, region_cfg, config, samples_map, output_dir, output_form
         abcd_cfg.mass_scan_step,
     )
 
+    # --- log region and ABCD zone definitions --------------------------------
+    # Show the full selection string for the region and each ABCD zone so the
+    # user can verify exactly what cuts are applied.
+    logger.info(
+        "=== ABCD: plot='%s'  region='%s' ===\n"
+        "  Base selection : %s\n"
+        "  Mass variable  : %s\n"
+        "  Z variable     : %s\n"
+        "  Mass scan      : %.1f – %.1f MeV  (step %.1f MeV, %d bins)\n"
+        "  Window sizing  : sr=%.1fσ  gap=%.1fσ  sb=%.1fσ  (fixed fallback hw=%.4f gap=%.4f sw=%.4f GeV)\n"
+        "  Z signal  (A,C): %s > %.3f mm  and  %s < %.3g mm\n"
+        "  Z control (B,D): %s >= %.3f mm  and  %s <= %.3f mm\n"
+        "  Zone definitions (for a given mass hypothesis m, window hw=%.1fσ·σ(m)):\n"
+        "    A  (signal region)   : (%s) AND |m_ee - m_hyp| < hw AND %s > %.3f\n"
+        "    B  (z-control)       : (%s) AND |m_ee - m_hyp| < hw AND %.3f <= %s <= %.3f\n"
+        "    C  (mass sideband, z-sig)  : (%s) AND m_ee in sideband AND %s > %.3f\n"
+        "    D  (mass sideband, z-ctrl) : (%s) AND m_ee in sideband AND %.3f <= %s <= %.3f\n"
+        "  Estimate: N_A^bkg = N_B * N_C / N_D",
+        plot_cfg.name, region_name,
+        region_cfg.selection,
+        abcd_cfg.mass_variable,
+        abcd_cfg.z_variable,
+        abcd_cfg.mass_scan_min * 1000, abcd_cfg.mass_scan_max * 1000,
+        abcd_cfg.mass_scan_step * 1000, len(mass_centers),
+        abcd_cfg.sr_sigmas, abcd_cfg.gap_sigmas, abcd_cfg.sb_sigmas,
+        abcd_cfg.mass_window_half_width, abcd_cfg.sideband_gap, abcd_cfg.sideband_width,
+        abcd_cfg.z_variable, abcd_cfg.z_signal_min,
+        abcd_cfg.z_variable, abcd_cfg.z_signal_max,
+        abcd_cfg.z_variable, abcd_cfg.z_control_min,
+        abcd_cfg.z_variable, abcd_cfg.z_control_max,
+        abcd_cfg.sr_sigmas,
+        region_cfg.selection, abcd_cfg.z_variable, abcd_cfg.z_signal_min,
+        region_cfg.selection, abcd_cfg.z_control_min, abcd_cfg.z_variable, abcd_cfg.z_control_max,
+        region_cfg.selection, abcd_cfg.z_variable, abcd_cfg.z_signal_min,
+        region_cfg.selection, abcd_cfg.z_control_min, abcd_cfg.z_variable, abcd_cfg.z_control_max,
+    )
+    if abcd_cfg.mass_resolution:
+        for rname, expr in abcd_cfg.mass_resolution.items():
+            logger.info("  Mass resolution [%s]: σ(m) = %s", rname, expr)
+
     outdir = Path(output_dir)
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -521,7 +597,7 @@ def plot_abcd(plot_cfg, region_cfg, config, samples_map, output_dir, output_form
         sharex=True,
     )
     fig.subplots_adjust(hspace=0.05)
-    add_hps_label(ax, lumi=config.luminosity, extra_lines=[region_cfg.label])
+    add_hps_label(ax, lumi=config.luminosity, extra_lines=[region_cfg.label], run_label=config.run_label)
 
     # ---- main panel --------------------------------------------------------
 
@@ -690,7 +766,7 @@ def plot_abcd_lumi_projections(plot_cfg, config, samples_map, output_dir, output
             sharex=True,
         )
         fig.subplots_adjust(hspace=0.05)
-        add_hps_label(ax, lumi=L_ref, extra_lines=[region_cfg_obj.label])
+        add_hps_label(ax, lumi=L_ref, extra_lines=[region_cfg_obj.label], run_label=config.run_label)
 
         # Draw reference ABCD estimate
         ax.step(mass_centers, ref_bkg, where="mid",
@@ -928,3 +1004,226 @@ def write_abcd_json(plot_cfg, config, samples_map, counts_cache, output_path):
     with open(out_path, "w") as f:
         json.dump({"meta": meta, "regions": regions_data}, f, indent=2)
     logger.info("ABCD results JSON written: %s", out_path)
+
+
+def plot_abcd_aux_histogram(plot_cfg, aux_cfg, base_region_cfg, bin_region_names,
+                             bin_region_cfgs, config, samples_map, output_dir, output_format,
+                             counts_cache=None, data_cache=None):
+    """Histogram of integrated ABCD estimate as a function of an aux variable.
+
+    Each element of *bin_region_names* is a child region that covers one bin of
+    ``aux_cfg.bins``.  For each bin the ABCD counts (already computed and cached
+    in *counts_cache*) are integrated over the mass scan to produce a single
+    event count.
+
+    All three quantities — ABCD estimate, observed data, MC sum — are drawn
+    using the **region-A** definition (signal mass window AND signal z region),
+    so the comparison is apples-to-apples:
+
+    Top panel
+    ---------
+    * ABCD estimate — dashed red step + uncertainty band (from data sidebands)
+    * MC (shape)   — solid navy step, no z/mass cuts, normalised to total ABCD
+                     estimate so the shape can be compared without being zero.
+                     Relative contributions of individual MC processes are
+                     preserved before the overall normalisation is applied.
+    * Observed data — black error-bar points at bin centres (region A observed)
+
+    Bottom panel
+    ------------
+    * ABCD / obs.  (red circles)
+    * MC / obs.    (navy squares, after normalisation; only when MC present)
+    """
+    abcd_cfg = plot_cfg.abcd
+    edges   = np.array(aux_cfg.bins, dtype=float)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    n_bins  = len(centers)
+
+    if n_bins == 0 or n_bins != len(bin_region_names):
+        logger.warning(
+            "plot_abcd_aux_histogram: mismatch between aux bins (%d) and "
+            "bin_region_names (%d) — skipping.",
+            n_bins, len(bin_region_names),
+        )
+        return
+
+    step = abcd_cfg.mass_scan_step
+    mass_centers = np.arange(
+        abcd_cfg.mass_scan_min,
+        abcd_cfg.mass_scan_max + step * 0.5,
+        step,
+    )
+
+    data_names   = [s for s in plot_cfg.samples if samples_map[s].sample_type == "data"]
+    bkg_names    = [s for s in plot_cfg.samples if samples_map[s].sample_type == "background"]
+    signal_names = [s for s in plot_cfg.samples if samples_map[s].sample_type == "signal"]
+    has_data   = bool(data_names)
+    has_bkg    = bool(bkg_names)
+    has_signal = bool(signal_names)
+
+    obs_vals  = np.zeros(n_bins)
+    obs_errs  = np.zeros(n_bins)
+    bkg_vals  = np.zeros(n_bins)
+    bkg_errs2 = np.zeros(n_bins)
+    # Background MC: lumi-weighted counts with ONLY the bin region mask applied
+    # (no z/mass cuts). Normalised to total ABCD; relative contributions preserved.
+    bkg_mc_raw = np.zeros(n_bins)
+    # Signal: one raw array per sample, each normalised independently to ABCD total.
+    sig_raw = {name: np.zeros(n_bins) for name in signal_names}
+
+    def _region_count(name, region_obj, data_arr_dict):
+        """Lumi-weighted event count in region_obj for sample *name* (no z/mass cuts)."""
+        raw         = data_arr_dict[name]
+        data_arr    = raw["data"]
+        total_scale = raw["total_scale"]
+        weight_expr = raw["weight_expr"]
+        cfg_s       = samples_map[name]
+
+        mask = region_obj.apply(data_arr)
+        if cfg_s.selection:
+            mask = mask & np.asarray(safe_evaluate(cfg_s.selection, data_arr), dtype=bool)
+
+        raw_w = safe_evaluate(weight_expr, data_arr, mask=mask)
+        if np.ndim(raw_w) == 0:
+            return float(np.sum(mask)) * float(raw_w) * total_scale
+        else:
+            return float(np.sum(np.asarray(raw_w, dtype=float))) * total_scale
+
+    for i, (rname, region_cfg_i) in enumerate(zip(bin_region_names, bin_region_cfgs)):
+        if not counts_cache or rname not in counts_cache:
+            logger.warning("Aux histogram: counts not found for region '%s', skipping bin %d.", rname, i)
+            continue
+        counts = counts_cache[rname]
+
+        # --- data: observed (na) and ABCD estimate (from nb, nc, nd) --------
+        for name in data_names:
+            if name not in counts:
+                continue
+            na_t, na_e, bg_t, bg_e = _integrate_region(
+                counts[name], mass_centers, step, abcd_cfg, rname
+            )
+            obs_vals[i]  += na_t
+            obs_errs[i]   = sqrt(obs_errs[i] ** 2 + na_e ** 2)
+            bkg_vals[i]  += bg_t
+            bkg_errs2[i] += bg_e ** 2
+
+        # --- background MC and signal: region-mask-only counts --------------
+        if data_cache is not None:
+            region_obj = Region(region_cfg_i)
+            for name in bkg_names:
+                if name in data_cache:
+                    bkg_mc_raw[i] += _region_count(name, region_obj, data_cache)
+            for name in signal_names:
+                if name in data_cache:
+                    sig_raw[name][i] += _region_count(name, region_obj, data_cache)
+
+    bkg_errs   = np.sqrt(bkg_errs2)
+    total_abcd = float(np.sum(bkg_vals))
+
+    # Normalise background MC sum to total ABCD (preserves relative shape)
+    total_bkg_mc = float(np.sum(bkg_mc_raw))
+    if total_bkg_mc > 0 and total_abcd > 0:
+        bkg_mc_vals = bkg_mc_raw * (total_abcd / total_bkg_mc)
+    else:
+        bkg_mc_vals = bkg_mc_raw.copy()
+        if has_bkg and total_bkg_mc == 0:
+            logger.warning("Aux histogram: all background MC bins are zero before normalisation.")
+
+    # Normalise each signal sample independently to total ABCD
+    sig_vals = {}
+    for name in signal_names:
+        total_sig = float(np.sum(sig_raw[name]))
+        if total_sig > 0 and total_abcd > 0:
+            sig_vals[name] = sig_raw[name] * (total_abcd / total_sig)
+        else:
+            sig_vals[name] = sig_raw[name].copy()
+
+    # --- figure -------------------------------------------------------
+    fig, (ax, ax_r) = plt.subplots(
+        2, 1, figsize=(8, 6),
+        gridspec_kw={"height_ratios": [3, 1]},
+        sharex=True,
+    )
+    fig.subplots_adjust(hspace=0.05)
+
+    label_lines = []
+    if base_region_cfg is not None:
+        lbl = base_region_cfg.label or base_region_cfg.name
+        if lbl:
+            label_lines = [lbl]
+    add_hps_label(ax, lumi=config.luminosity, extra_lines=label_lines, run_label=config.run_label)
+
+    # ABCD estimate — dashed red step
+    ax.step(centers, bkg_vals, where="mid",
+            color="red", lw=2, ls="--", label="ABCD estimate")
+    ax.fill_between(
+        centers,
+        np.maximum(bkg_vals - bkg_errs, 0), bkg_vals + bkg_errs,
+        step="mid", color="red", alpha=0.10,
+    )
+
+    # Background MC — solid navy step, normalised to total ABCD (shape only)
+    if has_bkg:
+        bkg_label = (
+            (" + ".join(samples_map[n].label for n in bkg_names) if len(bkg_names) <= 3 else "MC bkg.")
+            + " (norm. to ABCD)"
+        )
+        ax.step(centers, bkg_mc_vals, where="mid",
+                color="navy", lw=2, label=bkg_label)
+
+    # Signal samples — each individually normalised to total ABCD, dashed lines
+    for name in signal_names:
+        cfg_s = samples_map[name]
+        ax.step(centers, sig_vals[name], where="mid",
+                color=cfg_s.color, lw=1.5, ls="--",
+                label=f"{cfg_s.label} (norm. to ABCD)")
+
+    # Observed data — black error bars
+    if has_data:
+        ax.errorbar(
+            centers, obs_vals, yerr=obs_errs,
+            fmt="o", color="black", markersize=5, zorder=5,
+            label="Data (obs.)",
+        )
+
+    ax.set_ylabel("Events (integrated)")
+    if abcd_cfg.log_y:
+        ax.set_yscale("log")
+        ax.set_ylim(bottom=0.1)
+    ylo, yhi = ax.get_ylim()
+    ax.set_ylim(ylo, yhi * (10 if abcd_cfg.log_y else 1.5))
+    ax.legend(fontsize=10, loc="upper right")
+
+    # --- ratio panel --------------------------------------------------
+    ax_r.axhline(1.0, color="gray", lw=1, ls="--")
+
+    if has_data:
+        valid = obs_vals > 0
+        ratio_abcd     = np.where(valid, bkg_vals / obs_vals, np.nan)
+        ratio_abcd_err = np.where(valid, bkg_errs / obs_vals, np.nan)
+        ax_r.errorbar(
+            centers, ratio_abcd, yerr=ratio_abcd_err,
+            fmt="o", color="red", markersize=4, label="ABCD / obs.",
+        )
+
+    if has_bkg and has_data:
+        ratio_bkg = np.where(valid, bkg_mc_vals / obs_vals, np.nan)
+        ax_r.step(centers, ratio_bkg, where="mid",
+                  color="navy", lw=2, label="MC bkg. / obs.")
+
+    ax_r.set_xlabel(aux_cfg.label or aux_cfg.variable)
+    ax_r.set_ylabel("Ratio")
+    ax_r.set_ylim(0, 3)
+    ax_r.set_xlim(edges[0], edges[-1])
+    if has_data or has_bkg:
+        ax_r.legend(fontsize=9, loc="upper right")
+
+    # Sanitise the variable name for use in the filename
+    var_clean = _re.sub(r'[^a-zA-Z0-9]', '_', aux_cfg.variable).strip('_')
+    base_name = base_region_cfg.name if base_region_cfg is not None else "base"
+    fname = f"{plot_cfg.name}_{base_name}_{var_clean}.{output_format}"
+    outdir = Path(output_dir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / fname, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("Saved: %s", outdir / fname)

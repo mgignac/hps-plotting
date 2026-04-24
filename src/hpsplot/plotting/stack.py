@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def plot_stack(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_dir,
-               output_format="pdf"):
+               output_format="pdf", run_label=""):
     """Create a stacked histogram plot with data overlay and ratio panel.
 
     Parameters
@@ -261,7 +261,7 @@ def plot_stack(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_dir,
         handles, labels = ax_main.get_legend_handles_labels()
 
     ax_main.legend(handles, labels, loc="upper right")
-    add_hps_label(ax_main)
+    add_hps_label(ax_main, run_label=run_label)
 
     if has_ratio:
         plt.setp(ax_main.get_xticklabels(), visible=False)

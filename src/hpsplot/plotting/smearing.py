@@ -795,7 +795,7 @@ def build_tool_json(smearing_cfg, smearing_results, hist_map):
 # ---------------------------------------------------------------------------
 
 def plot_smearing(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_dir,
-                  output_format="pdf", beam_energy=None):
+                  output_format="pdf", beam_energy=None, run_label=""):
     """Derive and plot smearing factors for a given histogram.
 
     Dispatches to 1D or 2D based on whether hist_cfg.y_variable is set.

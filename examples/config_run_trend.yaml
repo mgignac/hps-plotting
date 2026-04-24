@@ -1,0 +1,91 @@
+tree: "preselection"
+output_dir: "plots/run_trend/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+hit_cat_file: /sdf/data/hps/users/mgignac/software/2021-ana/plotting/data/hit_cat_frac.txt
+hit_cat_ref_run: 14268
+hit_cat_poly_order: 2
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_5pc/
+    sample_type: data
+    label: "Data (2021, 5%)"
+    color: "black"
+    exclude_runs: [14185, 14194, 14256, 14277, 14330, 14497, 14501, 14577, 14578, 14579, 14585, 14608, 14609, 14610, 14611, 14612, 14685, 14727, 14732]
+#    run_min : 14185
+#    run_max : 14200
+
+  - name: tridents
+    directory: /sdf/data/hps/physics2021/preselection/v8/tritrig_z0calib_smeared/
+#/sdf/data/hps/physics2021/preselection/v8/tritrig_smeared/
+    sample_type: background
+    label: "Tridents"
+    color: "#e74c3c"
+    weight: "weight"
+    selection : "(ele_has_truth_link==1 && pos_has_truth_link==1)"
+    scale: 1.02
+    lumi_scale: true
+
+  - name: wab
+    directory: /sdf/data/hps/physics2021/preselection/v8/wab_z0calib_smeared/
+#/sdf/data/hps/physics2021/preselection/v8/wab_smeared/
+    sample_type: background
+    label: "WAB"
+    color: "#3498db"
+    weight: "weight"
+    selection : "(ele_has_truth_link==1 && pos_has_truth_link==1)"
+    scale: 0.6
+    lumi_scale: true
+
+  - name: oot
+    directory:
+      - /sdf/data/hps/physics2021/preselection/v8/tritrig_z0calib_smeared/
+      - /sdf/data/hps/physics2021/preselection/v8/wab_z0calib_smeared/
+    sample_type: background
+    label: "Out-of-time"
+    color: "#b3807b"
+    weight: "weight"
+    selection : "(ele_has_truth_link==0 || pos_has_truth_link==0)"
+    scale: 2.2
+    lumi_scale: true
+
+regions:
+  - name: loose
+    selection: ""
+    label: "Loose"
+  - name: loose_L1L1
+    selection: "isL1L1"
+    label: "L1L1"
+  - name: loose_L2L2
+    selection: "isL2L2"
+    label: "L2L2"
+  - name: loose_L1L2
+    selection: "isL1L2"
+    label: "L1L2"
+
+
+histograms:
+  - name: psum
+    variable: psum
+    bins: 50
+    x_min: 0.0
+    x_max: 6.0
+    x_label: "$p_{e^-} + p_{e^+}$ [GeV]"
+
+plots:
+#  - name: stack_loose
+#    plot_type: stack
+#    histograms: [psum]
+#    regions: [loose]
+#    samples: [tridents, wab, data]
+#    data_sample: data
+
+  - name: yield_vs_run
+    plot_type: run_trend
+    histograms: [psum]
+    regions: [loose,loose_L1L1,loose_L2L2,loose_L1L2]
+    samples: [oot, wab, tridents, data]
+    data_sample: data
+    ratio_y_min: 0.0
+    ratio_y_max: 2.0

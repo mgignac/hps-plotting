@@ -1,5 +1,5 @@
 tree: "preselection"
-output_dir: "plots/z0_tanl/"
+output_dir: "plots/z0_tanl-mc/"
 output_format: "pdf"
 
 # Aliases map short names to the split-path branch locations in the preselection tree
@@ -11,24 +11,38 @@ aliases:
 
 samples:
   - name: buggy
-    directory: /sdf/data/hps/physics2021/preselection/v7/data_small/
+    directory: /sdf/data/hps/physics2021/preselection/v8/tritrig_smeared/
+    #/sdf/data/hps/physics2021/preselection/v7/data_small/
     sample_type: data
     label: "Uncalibrated"
     color: "royalblue"
+#    run_min : 14185
+#    run_max : 14185
 
   - name: fixed
-    #directory: /sdf/data/hps/physics2021/preselection/v7//data_1pc_z0_calb_run_by_run
-    directory: /sdf/data/hps/physics2021/preselection/v7/data_small_z0_calb/
+    directory: /sdf/data/hps/physics2021/preselection/v8/tritrig_z0calib_smeared
+#/sdf/data/hps/physics2021/preselection/v8/data_small_fixAbs/ 
     sample_type: data
-    label: "Calibrated"
+    label: "Calibrated (tritrig)"
     color: "firebrick"
+#    run_min : 14185
+#    run_max : 14185
+
+  - name: wabs
+    directory: /sdf/data/hps/physics2021/preselection/v8/wab_z0calib_smeared
+#/sdf/data/hps/physics2021/preselection/v8/data_small_fixAbs/
+    sample_type: data
+    label: "Calibrated (WABs)"
+    color: "firebrick"
+#    run_min : 14185
+#    run_max : 14185
 
 regions: []
 
 plots:
   - name: ele_z0_vs_tanl
     plot_type: binned
-    samples: [fixed,buggy]
+    samples: [fixed,wabs,buggy]
     binned:
       variable:     "ele_z0"
       bin_variable: "ele_tanl"

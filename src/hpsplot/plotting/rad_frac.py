@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def plot_rad_frac(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_dir,
-                  output_format="pdf"):
+                  output_format="pdf", run_label=""):
     """Create a radiative fraction plot.
 
     Computes the bin-by-bin ratio of numerator sample(s) to the sum of all
@@ -129,7 +129,7 @@ def plot_rad_frac(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_d
         ax.set_yscale("log")
 
     ax.legend([frac_label], loc="upper right")
-    add_hps_label(ax)
+    add_hps_label(ax, run_label=run_label)
 
     # Save
     outdir = Path(output_dir)

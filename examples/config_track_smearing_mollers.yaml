@@ -1,0 +1,359 @@
+tree: "tracks"
+output_dir: "plots/track_smearing_mollers/"
+output_format: "pdf"
+beam_energy: 1.92  # GeV
+
+aliases:
+  track_phi0:        "track./track.phi0_"
+  track_omega:       "track./track.omega_"
+  track_tan_lambda:  "track./track.tan_lambda_"
+  track_z0:          "track./track.z0_"
+  track_px:          "track./track.px_"
+  track_py:          "track./track.py_"
+  track_pz:          "track./track.pz_"
+  track_d0:          "track./track.d0_"
+  track_chi2:        "track./track.chi2_"
+  track_ndf:         "track./track.ndf_"
+  track_n_hits:      "track./track.n_hits_"
+  track_volume:      "track./track.track_volume_"
+  track_charge:      "track./track.charge_"
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/users/mgignac/output/analysis/mollers/test/0/all.root
+    sample_type: data
+    label: "Data (Møller)"
+    color: "black"
+    weight: "1.0"
+    scale: 1.0
+    derive_smearing: false
+
+  - name: mc_unsmeared
+    directory: /sdf/data/hps/users/mgignac/output/analysis/mollers/mc-nosmear/0/all.root
+    sample_type: background
+    label: "MC (unsmeared)"
+    color: "#3498db"
+    weight: "1.0"
+    scale: 1.0
+    show_scale: true
+
+regions:
+  - name: all
+    selection: "track_chi2 > 0"
+    label: "All tracks"
+
+  - name: top
+    selection: "track_volume == 0"
+    label: "Top"
+
+  - name: bot
+    selection: "track_volume == 1"
+    label: "Bottom"
+
+histograms:
+  # --- Smearing derivation: 1D fits ---
+
+  - name: p_inclusive
+    variable: "sqrt(track_px**2 + track_py**2 + track_pz**2)"
+    bins: 50
+    x_min: 0.0
+    x_max: 2.2
+    x_label: "$p$ [GeV]"
+
+  - name: omega_inclusive
+    variable: track_omega
+    bins: 50
+    x_min: 0.00003
+    x_max: 0.00030
+    x_label: "$\\omega$ [mm$^{-1}$]"
+
+  # --- Smearing derivation: 2D sliced fits ---
+
+  - name: p_vs_tanlambda
+    variable: track_tan_lambda
+    bins: 12
+    x_min: -0.06
+    x_max: 0.06
+    x_label: "tan$\\lambda$"
+    y_variable: "sqrt(track_px**2 + track_py**2 + track_pz**2)"
+    y_bins: 50
+    y_min: 0.0
+    y_max: 2.2
+    y_label_2d: "$p$ [GeV]"
+    tool_variable_name: tanLambda
+
+  - name: p_vs_phi
+    variable: track_phi0
+    bins: 15
+    x_min: -0.1
+    x_max: 0.2
+    x_label: "$\\phi_0$"
+    y_variable: "sqrt(track_px**2 + track_py**2 + track_pz**2)"
+    y_bins: 50
+    y_min: 0.0
+    y_max: 2.2
+    y_label_2d: "$p$ [GeV]"
+    tool_variable_name: phi0
+
+  - name: omega_vs_tanlambda
+    variable: track_tan_lambda
+    bins: 12
+    x_min: -0.06
+    x_max: 0.06
+    x_label: "tan$\\lambda$"
+    y_variable: track_omega
+    y_bins: 50
+    y_min: 0.00003
+    y_max: 0.00030
+    y_label_2d: "$\\omega$ [mm$^{-1}$]"
+    tool_variable_name: tanLambda
+
+  - name: omega_vs_phi
+    variable: track_phi0
+    bins: 15
+    x_min: -0.1
+    x_max: 0.2
+    x_label: "$\\phi_0$"
+    y_variable: track_omega
+    y_bins: 50
+    y_min: 0.00003
+    y_max: 0.00030
+    y_label_2d: "$\\omega$ [mm$^{-1}$]"
+    tool_variable_name: phi0
+
+  - name: p_vs_nhits
+    variable: track_n_hits
+    bins: 7
+    x_min: 7.5
+    x_max: 14.5
+    x_label: "N hits"
+    y_variable: "sqrt(track_px**2 + track_py**2 + track_pz**2)"
+    y_bins: 50
+    y_min: 0.0
+    y_max: 2.2
+    y_label_2d: "$p$ [GeV]"
+    tool_variable_name: nHits
+
+  - name: omega_vs_nhits
+    variable: track_n_hits
+    bins: 7
+    x_min: 7.5
+    x_max: 14.5
+    x_label: "N hits"
+    y_variable: track_omega
+    y_bins: 50
+    y_min: 0.00003
+    y_max: 0.00030
+    y_label_2d: "$\\omega$ [mm$^{-1}$]"
+    tool_variable_name: nHits
+
+  - name: z0_inclusive
+    variable: track_z0
+    bins: 50
+    x_min: -0.3
+    x_max: 0.3
+    x_label: "$z_0$ [mm]"
+
+  - name: z0_vs_tanlambda
+    variable: track_tan_lambda
+    bins: 12
+    x_min: -0.06
+    x_max: 0.06
+    x_label: "tan$\\lambda$"
+    y_variable: track_z0
+    y_bins: 50
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$z_0$ [mm]"
+    tool_variable_name: tanLambda
+
+  - name: z0_vs_phi
+    variable: track_phi0
+    bins: 15
+    x_min: -0.1
+    x_max: 0.2
+    x_label: "$\\phi_0$"
+    y_variable: track_z0
+    y_bins: 50
+    y_min: -0.3
+    y_max: 0.3
+    y_label_2d: "$z_0$ [mm]"
+    tool_variable_name: phi0
+
+  # --- Shape comparison: 1D overlay histograms ---
+
+  - name: ov_p
+    variable: "sqrt(track_px**2 + track_py**2 + track_pz**2)"
+    bins: 50
+    x_min: 0.0
+    x_max: 2.2
+    x_label: "$p$ [GeV]"
+
+  - name: ov_phi0
+    variable: track_phi0
+    bins: 50
+    x_min: -0.15
+    x_max: 0.25
+    x_label: "$\\phi_0$ [rad]"
+
+  - name: ov_tanlambda
+    variable: track_tan_lambda
+    bins: 50
+    x_min: -0.08
+    x_max: 0.08
+    x_label: "tan$\\lambda$"
+
+  - name: ov_omega
+    variable: track_omega
+    bins: 50
+    x_min: 0.00003
+    x_max: 0.00030
+    x_label: "$\\omega$ [mm$^{-1}$]"
+
+  - name: ov_z0
+    variable: track_z0
+    bins: 50
+    x_min: -0.5
+    x_max: 0.5
+    x_label: "$z_0$ [mm]"
+
+  - name: ov_d0
+    variable: track_d0
+    bins: 50
+    x_min: -2.0
+    x_max: 2.0
+    x_label: "$d_0$ [mm]"
+
+  - name: ov_chi2ndf
+    variable: "track_chi2 / track_ndf"
+    bins: 50
+    x_min: 0.0
+    x_max: 5.0
+    x_label: "$\\chi^2 / N_{\\rm dof}$"
+
+  - name: ov_nhits
+    variable: track_n_hits
+    bins: 8
+    x_min: 6.5
+    x_max: 14.5
+    x_label: "$N_{\\rm hits}$"
+
+  - name: ov_px
+    variable: track_px
+    bins: 50
+    x_min: -0.15
+    x_max: 0.15
+    x_label: "$p_x$ [GeV]"
+
+  - name: ov_py
+    variable: track_py
+    bins: 50
+    x_min: -0.06
+    x_max: 0.06
+    x_label: "$p_y$ [GeV]"
+
+  - name: ov_pz
+    variable: track_pz
+    bins: 50
+    x_min: 0.0
+    x_max: 2.2
+    x_label: "$p_z$ [GeV]"
+
+plots:
+  - name: shapes
+    plot_type: overlay
+    histograms:
+      - ov_p
+      - ov_phi0
+      - ov_tanlambda
+      - ov_omega
+      - ov_z0
+      - ov_d0
+      - ov_chi2ndf
+      - ov_nhits
+      - ov_px
+      - ov_py
+      - ov_pz
+    regions:
+      - all
+      - top
+      - bot
+    samples: [data, mc_unsmeared]
+    data_sample: data
+    normalize: true
+    ratio_y_min: 0.5
+    ratio_y_max: 1.5
+
+  - name: smearing_p_relative
+    plot_type: smearing
+    histograms:
+      - p_inclusive
+      - p_vs_tanlambda
+      - p_vs_phi
+      - p_vs_nhits
+    regions:
+      - all
+      - top
+      - bot
+    samples: [data, mc_unsmeared]
+    smearing:
+      data_sample: data
+      mc_sample: mc_unsmeared
+      smearing_type: relative
+      fit_range: [0.5, 1.8]        # GeV: Møller momentum range (~E_beam/2)
+      sigma_range: 1.5
+      json_output: "plots/track_smearing_mollers/smearing_p.json"
+      top_region: top
+      bot_region: bot
+      tool_json_output: "plots/track_smearing_mollers/tool_smearing.json"
+      tool_section: pSmearing
+      scale_panel: false
+
+  - name: smearing_omega_absolute
+    plot_type: smearing
+    histograms:
+      - omega_inclusive
+      - omega_vs_tanlambda
+      - omega_vs_phi
+      - omega_vs_nhits
+    regions:
+      - all
+      - top
+      - bot
+    samples: [data, mc_unsmeared]
+    smearing:
+      data_sample: data
+      mc_sample: mc_unsmeared
+      smearing_type: absolute
+      fit_range: [0.00003, 0.00025]  # ω range at 1.92 GeV (mean ~1.06e-4)
+      sigma_range: 1.5
+      json_output: "plots/track_smearing_mollers/smearing_omega.json"
+      top_region: top
+      bot_region: bot
+      tool_json_output: "plots/track_smearing_mollers/tool_smearing.json"
+      tool_section: omegaSmearing
+      scale_panel: false
+
+  - name: smearing_z0_absolute
+    plot_type: smearing
+    histograms:
+      - z0_inclusive
+      - z0_vs_tanlambda
+      - z0_vs_phi
+    regions:
+      - all
+      - top
+      - bot
+    samples: [data, mc_unsmeared]
+    smearing:
+      data_sample: data
+      mc_sample: mc_unsmeared
+      smearing_type: absolute
+      fit_range: [-0.3, 0.3]
+      sigma_range: 1.5
+      json_output: "plots/track_smearing_mollers/smearing_z0.json"
+      top_region: top
+      bot_region: bot
+      tool_json_output: "plots/track_smearing_mollers/tool_smearing.json"
+      tool_section: z0Smearing
+      scale_panel: false

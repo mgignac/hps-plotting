@@ -1,5 +1,5 @@
 tree: "preselection"
-output_dir: "plots/abcd_highpsum/"
+output_dir: "plots/abcd_simps/"
 output_format: "pdf"
 lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
 
@@ -9,7 +9,7 @@ aliases:
 
 samples:
   - name: data
-    directory: /sdf/data/hps/physics2021/preselection/v7/data_1pc/
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_1pc_z0_calb_run_by_run
     sample_type: data
     label: "Data (2021, 1%)"
     color: "black"
@@ -20,25 +20,23 @@ samples:
 # Negation is expressed as == 0 (no tilde/exclamation operators).
 regions:
   - name: L1L1
-    selection: "eleL1 & posL1 & eleL2 & posL2 & eleL3 & posL3 & (psum > 2.8) & (vtx_proj_sig < 2.0)"
+    selection: "isL1L1 & (psum>1.0) & (psum < 3.0) & (vtx_proj_sig < 1.0)"
     label: "L1L1"
 
   - name: L2L2
-    selection: "(eleL1 == 0) & (posL1 == 0) & eleL2 & posL2 & eleL3 & posL3 & (psum > 2.8) & (vtx_proj_sig < 2.0)"
+    selection: "isL2L2 & (psum>1.0) & (psum < 3.0) & (vtx_proj_sig < 1.0)"
     label: "L2L2"
 
   - name: L3L3
-    selection: "(eleL1 == 0) & (posL1 == 0) & (eleL2 == 0) & (posL2 == 0) & eleL3 & posL3 & (psum > 2.8) & (vtx_proj_sig < 2.0)"
+    selection: "isL3L3 & (psum>1.0) & (psum < 3.0) & (vtx_proj_sig < 1.0)"
     label: "L3L3"
 
   - name: L1L2
-    # One track hits L1, the other hits L2 (but not L1) — symmetric OR
-    selection: "((eleL1 & (posL1 == 0) & posL2) | (posL1 & (eleL1 == 0) & eleL2)) & (psum > 2.8) & (vtx_proj_sig < 2.0)"
+    selection: "isL1L2 & (psum>1.0) & (psum < 3.0) & (vtx_proj_sig < 1.0)"
     label: "L1L2"
 
   - name: L2L3
-    # One track hits L2 (no L1), the other hits L3 (no L1, no L2) — symmetric OR
-    selection: "(((eleL1 == 0) & eleL2 & (posL1 == 0) & (posL2 == 0) & posL3) | ((posL1 == 0) & posL2 & (eleL1 == 0) & (eleL2 == 0) & eleL3)) & (psum > 2.8) & (vtx_proj_sig < 2.0)"
+    selection: "isL2L3 & (psum>1.0) & (psum < 3.0) & (vtx_proj_sig < 1.0)"
     label: "L2L3"
 
 plots:
@@ -48,7 +46,7 @@ plots:
     regions: [L1L1, L2L2, L3L3, L1L2, L2L3]
     abcd:
       mass_variable: "vertex_mass"
-      z_variable:    "vertex_z"
+      z_variable:    "min_y0"
       # Mass scan: 30 – 200 MeV in 1 MeV steps
       mass_scan_min:  0.030
       mass_scan_max:  0.250
@@ -58,11 +56,11 @@ plots:
       sideband_gap:   0.002
       sideband_width: 0.010
       # Z regions [mm]
-      z_signal_min:  10.0
-      z_signal_max: 1000.0
-      z_control_min:  2.0
-      z_control_max:  5.0
-      json_output: "plots/abcd_highpsum/results.json"
+      z_signal_min:  0.3
+      z_signal_max: 1000000000.0
+      z_control_min: 0.0 
+      z_control_max: 0.2
+      json_output: "plots/abcd_simps/results.json"
       x_label: "$m_{e^+e^-}$ [GeV]"
       log_y: true
       # --- mass-dependent window sizing ---
@@ -92,8 +90,6 @@ plots:
           color: "royalblue"
           linestyle: "--"
           scale_factor: 10.0
-#          directory: /sdf/data/hps/physics2021/preselection/v7/data_5pc/
-#          lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
 
         - label: "100% projection"
           color: "firebrick"

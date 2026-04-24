@@ -56,15 +56,18 @@ def parse_lumi_file(lumi_path):
     return run_lumi
 
 
-def _resolve_files(directory, run_min=None, run_max=None):
+def _resolve_files(directory, run_min=None, run_max=None, exclude_runs=None):
     """Return a list of .root file paths from *directory*, optionally filtered by run number.
 
     Handles directories, single .root files, and glob patterns (with ``*``).
     When *run_min* and/or *run_max* are given, only files whose run number
     (parsed from the filename via ``_RUN_RE``) falls within [run_min, run_max]
     are included.  Files with no parseable run number are always included.
+    Runs listed in *exclude_runs* are always skipped.
     """
     import glob as globmod
+
+    exclude = set(exclude_runs) if exclude_runs else set()
 
     if "*" in str(directory):
         candidates = sorted(globmod.glob(str(directory)))
@@ -75,7 +78,7 @@ def _resolve_files(directory, run_min=None, run_max=None):
         else:
             candidates = sorted(str(f) for f in p.glob("*.root"))
 
-    if run_min is None and run_max is None:
+    if run_min is None and run_max is None and not exclude:
         return candidates
 
     filtered = []
@@ -86,6 +89,8 @@ def _resolve_files(directory, run_min=None, run_max=None):
             if run_min is not None and run < run_min:
                 continue
             if run_max is not None and run > run_max:
+                continue
+            if run in exclude:
                 continue
         filtered.append(fpath)
 
@@ -122,7 +127,7 @@ def _extract_runs_from_path(data_dir):
     return runs
 
 
-def compute_luminosity(directories, lumi_file):
+def compute_luminosity(directories, lumi_file, run_min=None, run_max=None, exclude_runs=None):
     """Compute total luminosity by matching data files to a run-lumi table.
 
     Scans ROOT files in *directories*, extracts run numbers from their
@@ -134,6 +139,12 @@ def compute_luminosity(directories, lumi_file):
         Directories (or file paths / glob patterns) containing data ROOT files.
     lumi_file : str or Path
         Path to the run-by-run luminosity text file.
+    run_min : int, optional
+        Only include runs >= run_min.
+    run_max : int, optional
+        Only include runs <= run_max.
+    exclude_runs : list of int, optional
+        Run numbers to exclude entirely.
 
     Returns
     -------
@@ -148,10 +159,13 @@ def compute_luminosity(directories, lumi_file):
 
     run_lumi = parse_lumi_file(lumi_file)
 
-    # Extract unique run numbers across all directories
+    # Extract unique run numbers across all directories, respecting run filter
     runs_found = set()
     for d in directories:
-        runs_found |= _extract_runs_from_path(d)
+        for fpath in _resolve_files(d, run_min=run_min, run_max=run_max, exclude_runs=exclude_runs):
+            m = _RUN_RE.search(Path(fpath).name)
+            if m:
+                runs_found.add(int(m.group(1)))
 
     # Sum luminosities
     total_lumi = 0.0
@@ -209,14 +223,16 @@ class Sample:
         # Build list of uproot patterns from all directories
         run_min = self.config.run_min
         run_max = self.config.run_max
-        needs_run_filter = run_min is not None or run_max is not None
+        exclude_runs = self.config.exclude_runs or []
+        needs_run_filter = run_min is not None or run_max is not None or bool(exclude_runs)
 
         patterns = []
         for d in self.config.directories:
             p = Path(d)
             if needs_run_filter:
                 # Expand to individual files so we can filter by run number
-                files = _resolve_files(d, run_min=run_min, run_max=run_max)
+                files = _resolve_files(d, run_min=run_min, run_max=run_max,
+                                       exclude_runs=exclude_runs)
                 if not files:
                     logger.warning(
                         "No files found for sample '%s' in '%s' after run filtering "

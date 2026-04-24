@@ -62,6 +62,17 @@ class HistogramData:
             bin_errors=np.sqrt(self.bin_errors ** 2 + other.bin_errors ** 2),
         )
 
+    def __mul__(self, scale):
+        """Scale contents and errors by a constant factor."""
+        return HistogramData(
+            bin_edges=self.bin_edges.copy(),
+            bin_contents=self.bin_contents * scale,
+            bin_errors=self.bin_errors * abs(scale),
+        )
+
+    def __rmul__(self, scale):
+        return self.__mul__(scale)
+
     def normalized(self):
         """Return a copy normalized to unit area."""
         total = self.integral
