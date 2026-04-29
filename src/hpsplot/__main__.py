@@ -20,7 +20,9 @@ from .plotting.overlay import plot_overlay
 from .plotting.rad_frac import plot_rad_frac
 from .plotting.smearing import plot_smearing, build_tool_json
 from .plotting.abcd import (plot_abcd, plot_abcd_summary, plot_abcd_lumi_projections,
-                             write_abcd_json, plot_abcd_aux_histogram)
+                             write_abcd_json, plot_abcd_aux_histogram,
+                             plot_signal_window_scan,
+                             plot_signal_2d, plot_data_yield_2d)
 from .plotting.binned import plot_binned_comparison
 from .plotting.run_trend import plot_run_trend
 from .results import process
@@ -496,8 +498,18 @@ def _generate_plots(config, results, logger):
                 all_region_branches |= extract_branch_names(aux_cfg.variable)
 
             counts_cache = {}
-            data_cache = {}  # sample_name → raw arrays; shared across all regions
-            for region_name in plot_cfg.regions:
+            data_cache = {}        # sample_name → raw arrays; shared across all regions
+            signal_scan_cache = {} # region_name → list of per-eps² scan results
+            data_yield_cache = {}  # region_name → {n_data_mass_only, mass_centers, abcd_cfg}
+
+            # When aux histograms expand the regions into child bins, also run
+            # the base regions first so their ABCD plots and signal scan results
+            # are generated and included in the JSON output.
+            regions_to_process = (
+                list(original_base_regions) + list(plot_cfg.regions)
+                if aux_groups else list(plot_cfg.regions)
+            )
+            for region_name in regions_to_process:
                 region_cfg = region_map.get(region_name)
                 if region_cfg is None:
                     logger.warning("Region '%s' not found, skipping.", region_name)
@@ -508,6 +520,8 @@ def _generate_plots(config, results, logger):
                     ann_scorer=ann_scorer,
                     data_cache=data_cache,
                     all_region_branches=all_region_branches,
+                    signal_scan_cache=signal_scan_cache,
+                    data_yield_cache=data_yield_cache,
                 )
 
             if aux_groups:
@@ -534,7 +548,26 @@ def _generate_plots(config, results, logger):
                                            ann_scorer=ann_scorer)
             if abcd_cfg.json_output:
                 write_abcd_json(plot_cfg, config, samples_map, counts_cache,
-                                abcd_cfg.json_output)
+                                abcd_cfg.json_output,
+                                signal_scan_cache=signal_scan_cache or None)
+
+            # Window-scan comparison plot: one figure per region showing all
+            # signal samples as nsig/nsig_nominal vs hw curves.
+            if abcd_cfg.window_scan and signal_scan_cache:
+                nom_hw = abcd_cfg.mass_window_half_width
+                for region_name in list(signal_scan_cache.keys()):
+                    plot_signal_window_scan(
+                        signal_scan_cache, region_name, outdir, config.output_format,
+                        nominal_hw=nom_hw,
+                    )
+
+            # 2D signal yield plot: nsig(mass, ε²) heat map.
+            if abcd_cfg.signal_2d_output and signal_scan_cache:
+                plot_signal_2d(signal_scan_cache, outdir, config.output_format)
+                if data_yield_cache:
+                    plot_data_yield_2d(signal_scan_cache, data_yield_cache,
+                                       outdir, config.output_format)
+
             continue
 
         # Binned comparison plots iterate over regions but not histograms
@@ -639,6 +672,20 @@ def _run_config(config, logger):
     logger.info("Processing samples...")
     results = process(config)
     _generate_plots(config, results, logger)
+
+    if config.target_lumi is not None and config.luminosity > 0:
+        lumi_factor = config.target_lumi / config.luminosity
+        logger.info(
+            "Producing full-lumi plots: scaling by %.4g (%.4g pb^-1 -> %.4g pb^-1)",
+            lumi_factor, config.luminosity, config.target_lumi,
+        )
+        scaled = _scale_results(results, lumi_factor)
+        full_cfg = copy.copy(config)
+        base = config.output_dir.rstrip("/")
+        full_cfg.output_dir = base + "_full_lumi/"
+        full_cfg.luminosity = config.target_lumi
+        _generate_plots(full_cfg, scaled, logger)
+
     return results
 
 

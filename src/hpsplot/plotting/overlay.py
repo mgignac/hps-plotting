@@ -66,7 +66,7 @@ def plot_overlay(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_di
             continue
 
         s_cfg = samples_map[s_name]
-        label = f"{s_cfg.label} ({hdata.integral:.0f})"
+        label = s_cfg.label
         hplot = hdata.normalized() if normalize else hdata
         bin_centers = hplot.bin_centers
 
@@ -120,12 +120,24 @@ def plot_overlay(plot_cfg, hist_cfg, region_cfg, results, samples_map, output_di
 
     if hist_cfg.log_y:
         ax.set_yscale("log")
-        ax.set_ylim(bottom=1e-4 if normalize else 0.1)
+        # Derive range from all plotted line data; fill_between polygons with near-zero
+        # lower bounds confuse matplotlib's log-scale autoscale badly.
+        yvals_pos = [y for line in ax.lines for y in line.get_ydata()
+                     if np.isfinite(y) and y > 0]
+        if yvals_pos:
+            raw_bottom = min(yvals_pos)
+            raw_top = max(yvals_pos)
+            floor = 1e-4 if normalize else 1e-4
+            bottom = max(raw_bottom / 10.0, floor)
+            top = raw_top * (hist_cfg.y_top_scale if hist_cfg.y_top_scale != 1.0 else 5.0)
+        else:
+            bottom = 1e-4 if normalize else 1e-3
+            top = 1.0
+        ax.set_ylim(bottom=bottom, top=top)
     else:
         ax.set_ylim(bottom=0)
-
-    if hist_cfg.y_top_scale != 1.0:
-        ax.set_ylim(top=ax.get_ylim()[1] * hist_cfg.y_top_scale)
+        if hist_cfg.y_top_scale != 1.0:
+            ax.set_ylim(top=ax.get_ylim()[1] * hist_cfg.y_top_scale)
 
     # Fit overlay
     if plot_cfg.fit is not None:

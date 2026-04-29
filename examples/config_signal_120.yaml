@@ -8,7 +8,7 @@ lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
 # N_data counted in [0.115, 0.125] GeV (± 5 MeV) within the scaling region.
 scaling_mass_variable: "vtx_invM"
 scaling_mass_window: 0.005   # half-width [GeV]
-scaling_rad_frac: 0.05       # f_rad: radiative fraction of background
+scaling_rad_frac: 0.05097    # f_rad: radiative fraction of background
 
 aliases:
   ele_px: "ele./ele.px_"

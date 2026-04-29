@@ -1,0 +1,170 @@
+tree: "preselection"
+output_dir: "plots/abcd_window_scan/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+
+scaling_rad_frac: 0.05097
+
+aliases:
+  vertex_mass: "vertex./vertex.invM_"
+  vertex_z:    "vertex./vertex.pos_.fZ"
+
+# ---------------------------------------------------------------------------
+# Samples
+# ---------------------------------------------------------------------------
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Data (2021)"
+    color: "black"
+
+  # ctau [mm] = 8.109e-8 / (ε² × m_MeV)   at ε²=1e-9:
+  # 60 MeV → 1.3515 mm
+  - name: ap_60
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap60MeV
+    sample_type: signal
+    label: "A' 60 MeV"
+    color: "#1f77b4"
+    ap_mass: 0.060
+    weight: "weight"
+    weight_scan:
+      - label: "ap60_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 1.3515)) / (true_ap_betagamma * 1.3515)"
+        color: "#1f77b4"
+
+  # 80 MeV → 1.0136 mm
+  - name: ap_80
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap80MeV
+    sample_type: signal
+    label: "A' 80 MeV"
+    color: "#ff7f0e"
+    ap_mass: 0.080
+    weight: "weight"
+    weight_scan:
+      - label: "ap80_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 1.0136)) / (true_ap_betagamma * 1.0136)"
+        color: "#ff7f0e"
+
+  # 100 MeV → 0.8109 mm
+  - name: ap_100
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap100MeV
+    sample_type: signal
+    label: "A' 100 MeV"
+    color: "#2ca02c"
+    ap_mass: 0.100
+    weight: "weight"
+    weight_scan:
+      - label: "ap100_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.8109)) / (true_ap_betagamma * 0.8109)"
+        color: "#2ca02c"
+
+  # 110 MeV → 0.7372 mm
+  - name: ap_110
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap110MeV
+    sample_type: signal
+    label: "A' 110 MeV"
+    color: "#d62728"
+    ap_mass: 0.110
+    weight: "weight"
+    weight_scan:
+      - label: "ap110_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.7372)) / (true_ap_betagamma * 0.7372)"
+        color: "#d62728"
+
+  # 120 MeV → 0.6758 mm
+  - name: ap_120
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap120MeV
+    sample_type: signal
+    label: "A' 120 MeV"
+    color: "#9467bd"
+    ap_mass: 0.120
+    weight: "weight"
+    weight_scan:
+      - label: "ap120_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.6758)) / (true_ap_betagamma * 0.6758)"
+        color: "#9467bd"
+
+  # 140 MeV → 0.5792 mm
+  - name: ap_140
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap140MeV
+    sample_type: signal
+    label: "A' 140 MeV"
+    color: "#8c564b"
+    ap_mass: 0.140
+    weight: "weight"
+    weight_scan:
+      - label: "ap140_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.5792)) / (true_ap_betagamma * 0.5792)"
+        color: "#8c564b"
+
+  # 160 MeV → 0.5068 mm
+  - name: ap_160
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap160MeV
+    sample_type: signal
+    label: "A' 160 MeV"
+    color: "#e377c2"
+    ap_mass: 0.160
+    weight: "weight"
+    weight_scan:
+      - label: "ap160_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.5068)) / (true_ap_betagamma * 0.5068)"
+        color: "#e377c2"
+
+  # 180 MeV → 0.4505 mm
+  - name: ap_180
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap180MeV
+    sample_type: signal
+    label: "A' 180 MeV"
+    color: "#7f7f7f"
+    ap_mass: 0.180
+    weight: "weight"
+    weight_scan:
+      - label: "ap180_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.4505)) / (true_ap_betagamma * 0.4505)"
+        color: "#7f7f7f"
+
+# ---------------------------------------------------------------------------
+# Regions
+# ---------------------------------------------------------------------------
+regions:
+  - name: inclusive
+    selection: "vertex_mass > 0.0"
+    label: "Inclusive"
+
+# ---------------------------------------------------------------------------
+# Plots
+# ---------------------------------------------------------------------------
+plots:
+  - name: abcd_window_scan
+    plot_type: abcd
+    samples: [data, ap_60, ap_80, ap_100, ap_110, ap_120, ap_140, ap_160, ap_180]
+    regions: [inclusive]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      mass_scan_min:  0.060
+      mass_scan_max:  0.180
+      mass_scan_step: 0.010
+      # Nominal window (5 MeV half-width); must appear in window_scan for normalization
+      mass_window_half_width: 0.005
+      sideband_gap:           0.002
+      sideband_width:         0.010
+      z_signal_min:  0.2
+      z_signal_max:  1.0e+9
+      z_control_min: 0.0
+      z_control_max: 0.2
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true
+      json_output: "plots/abcd_window_scan/results_window_scan.json"
+      # Window size scan: list of half-widths [GeV] to evaluate.
+      # nsig/nsig(nominal=5 MeV) vs hw will be plotted per mass point.
+      window_scan: [0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.008, 0.010, 0.012, 0.015, 0.018, 0.020]

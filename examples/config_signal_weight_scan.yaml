@@ -1,0 +1,121 @@
+tree: "preselection"
+output_dir: "plots/signal_weight_scan/"
+output_format: "pdf"
+
+# Validation config for the weight_scan feature.
+# The ap120 signal MC is loaded ONCE; 10 log-spaced eps2 points (1e-10 to 1e-6)
+# are produced by re-evaluating different weight expressions on the same in-memory data.
+#
+# ctau formula:  cτ [mm] = 3ħc / (α ε² m_A'[MeV])
+# Weight formula matches config_signal_120.yaml:
+#   weight * 1500.0 * exp(-vtx_z_true / (βγ * cτ)) / (βγ * cτ)
+# Colors use the plasma colormap: purple (long-lived) → yellow (prompt).
+
+aliases:
+  vtx_invM: "vertex./vertex.invM_"
+  vtx_z:    "vertex./vertex.pos_.fZ"
+
+samples:
+  - name: ap120_scan
+    directory: /sdf/data/hps/physics2021/preselection/v7/ap_signal_smeared/ap120MeV
+    sample_type: signal
+    scale: 160000.0
+    weight: "1.0"
+    color: "#888888"
+    weight_scan:
+      - label: "eps2_1e-10"
+        epsilon_sq: 1.0e-10
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 6.76023)) / (true_ap_betagamma * 6.76023)"
+        color: "#40039c"
+
+      - label: "eps2_2.64e-10"
+        epsilon_sq: 2.64e-10
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 2.56394)) / (true_ap_betagamma * 2.56394)"
+        color: "#6400a7"
+
+      - label: "eps2_6.95e-10"
+        epsilon_sq: 6.95e-10
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.97242)) / (true_ap_betagamma * 0.97242)"
+        color: "#8405a6"
+
+      - label: "eps2_1.83e-9"
+        epsilon_sq: 1.83e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.36881)) / (true_ap_betagamma * 0.36881)"
+        color: "#a21c9a"
+
+      - label: "eps2_4.83e-9"
+        epsilon_sq: 4.83e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.13988)) / (true_ap_betagamma * 0.13988)"
+        color: "#ba3487"
+
+      - label: "eps2_1.27e-8"
+        epsilon_sq: 1.27e-8
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.05305)) / (true_ap_betagamma * 0.05305)"
+        color: "#d04d73"
+
+      - label: "eps2_3.36e-8"
+        epsilon_sq: 3.36e-8
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.02012)) / (true_ap_betagamma * 0.02012)"
+        color: "#e16560"
+
+      - label: "eps2_8.86e-8"
+        epsilon_sq: 8.86e-8
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.00763)) / (true_ap_betagamma * 0.00763)"
+        color: "#f0804d"
+
+      - label: "eps2_2.34e-7"
+        epsilon_sq: 2.34e-7
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.00289)) / (true_ap_betagamma * 0.00289)"
+        color: "#fa9d3a"
+
+      - label: "eps2_6.16e-7"
+        epsilon_sq: 6.16e-7
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.00110)) / (true_ap_betagamma * 0.00110)"
+        color: "#fdbc2a"
+
+regions:
+  - name: loose
+    selection: "(vtx_invM > 0.090) & (vtx_invM < 0.150)"
+    label: "Loose preselection"
+
+histograms:
+  - name: vtx_z
+    variable: vtx_z
+    bins: 60
+    x_min: -20.0
+    x_max: 100.0
+    x_label: "$z_{vtx}$ [mm]"
+    log_y: true
+
+  - name: vtx_mass
+    variable: vtx_invM
+    bins: 40
+    x_min: 0.09
+    x_max: 0.15
+    x_label: "$m_{e^+e^-}$ [GeV]"
+
+  - name: min_y0
+    variable: min_y0
+    bins: 50
+    x_min: 0.0
+    x_max: 2.0
+    x_label: "min $|y_0|$ [mm]"
+    log_y: true
+
+plots:
+  - name: overlay_scan
+    plot_type: overlay
+    histograms: [vtx_z, vtx_mass, min_y0]
+    regions: [loose]
+    samples:
+      - eps2_1e-10
+      - eps2_2.64e-10
+      - eps2_6.95e-10
+      - eps2_1.83e-9
+      - eps2_4.83e-9
+      - eps2_1.27e-8
+      - eps2_3.36e-8
+      - eps2_8.86e-8
+      - eps2_2.34e-7
+      - eps2_6.16e-7
+    normalize: true

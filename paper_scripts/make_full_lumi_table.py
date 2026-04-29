@@ -21,9 +21,11 @@ def parse_lumi(path):
     return lumi
 
 
+BAD_RUNS = {14272, 14577, 14578, 14579, 14608, 14609, 14610, 14611, 14612}
+
 # Sum luminosities across batches
 batches = [parse_lumi(p) for p in LUMI_FILES]
-all_runs = sorted(set().union(*batches))
+all_runs = sorted(r for r in set().union(*batches) if r not in BAD_RUNS)
 combined = {r: sum(b.get(r, 0.0) for b in batches) for r in all_runs}
 total = sum(combined.values())
 n_rows = len(all_runs)

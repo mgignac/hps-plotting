@@ -202,8 +202,26 @@ class Sample:
         self.scale = config.scale
         self._data = None
 
+    @property
+    def weight_scan_exprs(self):
+        """Return ``[(label, weight_expression), ...]`` for this sample.
+
+        When ``weight_scan`` entries are defined in the config, they are
+        returned directly.  Otherwise falls back to a single entry using the
+        default ``weight`` field, so callers can always iterate without
+        checking for the scan explicitly.
+        """
+        if self.config.weight_scan:
+            return [(e.label, e.weight) for e in self.config.weight_scan]
+        return [(self.name, self.weight_expr)]
+
     def load(self, branches, aliases=None):
         """Load specified branches from all ROOT files in the sample directory.
+
+        When ``weight_scan`` is populated the branches needed by every scan
+        weight expression are automatically added to the request, so the
+        returned data dict is ready for all weight evaluations without a
+        second load.
 
         Parameters
         ----------
@@ -217,6 +235,17 @@ class Sample:
         dict
             Mapping of branch name to numpy array.
         """
+        from .utils import extract_branch_names as _ebn
+        branches = set(branches)
+        # Auto-include branches required by each scan weight expression
+        for entry in self.config.weight_scan:
+            branches |= _ebn(entry.weight)
+        if self.config.eps2_scan is not None:
+            es = self.config.eps2_scan
+            branches |= _ebn(es.z_branch)
+            branches |= _ebn(es.betagamma_branch)
+            branches |= _ebn(es.base_weight)
+
         tree = self.config.tree
         aliases = aliases or {}
 

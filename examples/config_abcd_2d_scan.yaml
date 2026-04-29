@@ -1,0 +1,265 @@
+tree: "preselection"
+output_dir: "plots/abcd_2d_scan/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+
+scaling_rad_frac: "-1.28948684e-01 + 7.49564672e+00*m - 1.18467019e+02*m**2 + 8.86483892e+02*m**3 - 3.13954474e+03*m**4 + 4.22677239e+03*m**5"
+
+aliases:
+  vertex_mass: "vertex./vertex.invM_"
+  vertex_z:    "vertex./vertex.pos_.fZ"
+
+# ---------------------------------------------------------------------------
+# Shared eps2_scan config applied to every signal sample.
+# cτ [mm] = 8.109e-8 / (ε² × m_A' [MeV])  is computed automatically.
+# Half-decade spacing from 1e-11 to 1e-6 (11 points, 5 decades).
+# ---------------------------------------------------------------------------
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Data (2021)"
+    color: "black"
+
+  - name: ap_60
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap60MeV
+    sample_type: signal
+    label: "A' 60 MeV"
+    color: "#1f77b4"
+    ap_mass: 0.060
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_70
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap70MeV
+    sample_type: signal
+    label: "A' 70 MeV"
+    color: "#ff7f0e"
+    ap_mass: 0.070
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_80
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap80MeV
+    sample_type: signal
+    label: "A' 80 MeV"
+    color: "#2ca02c"
+    ap_mass: 0.080
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_90
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap90MeV
+    sample_type: signal
+    label: "A' 90 MeV"
+    color: "#d62728"
+    ap_mass: 0.090
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_100
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap100MeV
+    sample_type: signal
+    label: "A' 100 MeV"
+    color: "#9467bd"
+    ap_mass: 0.100
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_110
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap110MeV
+    sample_type: signal
+    label: "A' 110 MeV"
+    color: "#8c564b"
+    ap_mass: 0.110
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_120
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap120MeV
+    sample_type: signal
+    label: "A' 120 MeV"
+    color: "#e377c2"
+    ap_mass: 0.120
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_130
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap130MeV
+    sample_type: signal
+    label: "A' 130 MeV"
+    color: "#7f7f7f"
+    ap_mass: 0.130
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_140
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap140MeV
+    sample_type: signal
+    label: "A' 140 MeV"
+    color: "#bcbd22"
+    ap_mass: 0.140
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_150
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap150MeV
+    sample_type: signal
+    label: "A' 150 MeV"
+    color: "#17becf"
+    ap_mass: 0.150
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_160
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap160MeV
+    sample_type: signal
+    label: "A' 160 MeV"
+    color: "#aec7e8"
+    ap_mass: 0.160
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_170
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap170MeV
+    sample_type: signal
+    label: "A' 170 MeV"
+    color: "#ffbb78"
+    ap_mass: 0.170
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+  - name: ap_180
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap180MeV
+    sample_type: signal
+    label: "A' 180 MeV"
+    color: "#98df8a"
+    ap_mass: 0.180
+    weight: "weight"
+    eps2_scan:
+      eps2_values: [1.0e-11, 3.16e-11, 1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8, 3.16e-8, 1.0e-7, 3.16e-7, 1.0e-6]
+      z_branch: "true_ap.vtx_z_"
+      betagamma_branch: "true_ap_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+
+# ---------------------------------------------------------------------------
+# Regions
+# ---------------------------------------------------------------------------
+regions:
+  - name: inclusive
+    selection: "(psum > 2.8) & (vtx_proj_sig < 2.0)"
+    label: "Inclusive"
+
+  - name: L1L1
+    selection: "(isL1L1) & (psum > 2.8) & (vtx_proj_sig < 2.0)"
+    label: "L1L1"
+
+  - name: L1L2
+    selection: "(isL1L2) & (psum > 2.8) & (vtx_proj_sig < 2.0)"
+    label: "L1L2"
+
+  - name: L2L2
+    selection: "(isL2L2) & (psum > 2.8) & (vtx_proj_sig < 2.0)"
+    label: "L2L2"
+
+# ---------------------------------------------------------------------------
+# Plots
+# ---------------------------------------------------------------------------
+plots:
+  - name: abcd_2d_scan
+    plot_type: abcd
+    samples: [data, ap_60, ap_70, ap_80, ap_90, ap_100, ap_110, ap_120,
+              ap_130, ap_140, ap_150, ap_160, ap_170, ap_180]
+    regions: [inclusive, L1L1, L1L2, L2L2]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      mass_scan_min:  0.060
+      mass_scan_max:  0.180
+      mass_scan_step: 0.010
+      mass_window_half_width: 0.005
+      sideband_gap:           0.002
+      sideband_width:         0.010
+      z_signal_min:  0.2
+      z_signal_max:  1.0e+9
+      z_control_min: 0.0
+      z_control_max: 0.2
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true
+      json_output: "plots/abcd_2d_scan/results_2d_scan.json"
+      signal_2d_output: "enabled"

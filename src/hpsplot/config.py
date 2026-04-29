@@ -8,6 +8,53 @@ import yaml
 
 
 @dataclass
+class Eps2ScanConfig:
+    """Auto-generate lifetime-reweighted signal yields for a grid of ε² values.
+
+    cτ [mm] = 8.109×10⁻⁸ / (ε² × m_A' [MeV])
+    Weight per event: base_weight × gen_length_mm × exp(−Δz/(βγ·cτ)) / (βγ·cτ)
+    where Δz = z_true − target_z_mm.
+
+    Requires ``ap_mass`` to be set on the parent SampleConfig.
+    """
+    eps2_values: List[float] = field(default_factory=list)
+    z_branch: str = "true_ap.vtx_z_"
+    betagamma_branch: str = "true_ap_betagamma"
+    gen_length_mm: float = 1500.0
+    target_z_mm: float = -1.1
+    base_weight: str = "weight"
+
+
+@dataclass
+class WeightScanEntry:
+    """One entry in a per-sample weight scan (label + weight expression).
+
+    Used by :attr:`SampleConfig.weight_scan` to describe multiple logically
+    identical samples that differ only in their event weight.  The sample's
+    ROOT files are loaded once; the weight array is re-evaluated cheaply for
+    each entry without touching disk again.
+    """
+    label: str
+    weight: str
+    color: str = ""                  # matplotlib color; leave empty to auto-assign from cycle
+    epsilon_sq: Optional[float] = None  # ε² for Eq. 4 signal scaling in ABCD
+
+
+@dataclass
+class SimpConfig:
+    """Dark sector parameters for SIMP signal MC reweighting.
+
+    Used when ``SampleConfig.signal_type == "simp"``.  Branch names and
+    generator parameters (z_branch, betagamma_branch, gen_length_mm,
+    target_z_mm, base_weight) are taken from the sample's ``eps2_scan``
+    block so there is no duplication.
+    """
+    alpha_d: float = 0.01           # dark sector coupling constant α_D
+    vd_mass_ratio: float = 0.6      # m_V_D / m_A'  (benchmark: 0.6)
+    pid_mass_ratio: float = 0.3333  # m_π_D / m_A'  (benchmark: 1/3)
+
+
+@dataclass
 class SampleConfig:
     name: str
     directory: Union[str, List[str]] = ""
@@ -28,6 +75,12 @@ class SampleConfig:
     run_min: Optional[int] = None      # inclusive lower bound on run number (data only)
     run_max: Optional[int] = None      # inclusive upper bound on run number (data only)
     exclude_runs: List[int] = field(default_factory=list)  # run numbers to skip entirely
+    # Multiple weight scenarios sharing the same ROOT data (load once, weight N times).
+    # When non-empty, weight_scan_exprs() iterates over these instead of the default weight.
+    weight_scan: List[WeightScanEntry] = field(default_factory=list)
+    eps2_scan: Optional["Eps2ScanConfig"] = None
+    signal_type: str = "aprime"          # "aprime" or "simp"
+    simp: Optional["SimpConfig"] = None  # dark sector params; required when signal_type="simp"
 
     def __post_init__(self):
         # Normalize directory to a list
@@ -214,6 +267,35 @@ class ABCDConfig:
     mass_resolution: Dict[str, str] = field(default_factory=dict)  # region → sigma(m) expression
     lumi_projections: List[LumiProjectionConfig] = field(default_factory=list)
     json_output: str = ""  # path to write per-mass-bin results JSON; empty = no output
+    # --- signal normalization region ---
+    # Name of a region (defined in the global regions list) to use as the
+    # reference for Eq. 4 signal normalization.  N_data and N_mc are both
+    # counted in this region (mass window applied, no z cut).  When empty,
+    # the ABCD region itself is used (default / tighter behaviour).
+    signal_norm_region: str = ""
+    # --- mass window size systematic scan ---
+    # List of signal-window half-widths [GeV] to evaluate alongside the nominal.
+    # For each hw value the signal yield is recomputed using in-memory arrays
+    # (no extra ROOT I/O).  Results are stored in the JSON and a comparison plot
+    # is produced showing nsig vs hw for every signal sample on one figure.
+    # Leave empty (default) to disable the scan entirely.
+    window_scan: List[float] = field(default_factory=list)
+    # --- 2D signal yield plot (nsig vs mass and ε²) ---
+    # When non-empty, produce a 2D heat map of nsig(mass, ε²) after the scan.
+    # The value is used as a flag; output filename is auto-generated from region
+    # name and output_format.
+    signal_2d_output: str = ""
+    # --- mass scan points ---
+    # When True, mass centers are the sorted ap_mass values of signal samples
+    # in the plot (filtered to [mass_scan_min, mass_scan_max]) rather than the
+    # regular arange grid.  mass_scan_min/max are still used as bounds.
+    mass_scan_from_signal_samples: bool = False
+    # --- signal normalization window ---
+    # When set, n_data and n_mc used in the Eq. 4 prompt-yield calculation are
+    # counted in [m ± signal_norm_hw] rather than the ABCD signal-region window.
+    # n_mc_a (the signal acceptance in region A) still uses the ABCD window.
+    # Set to None (default) to use the ABCD window for both (original behaviour).
+    signal_norm_hw: Optional[float] = None
     # --- aux variable histograms ---
     # Each entry auto-generates disjoint per-bin regions from the base regions in
     # the plot and produces a histogram of integrated ABCD / data / MC vs that variable.
@@ -264,12 +346,13 @@ class Config:
     beam_energy: Optional[float] = None  # beam energy in GeV; used for scale correction panel
     scaling_mass_variable: str = ""      # expression for invariant mass used in Eq. 4 scaling
     scaling_mass_window: float = 0.005   # half-width [GeV] of mass window for counting data events
-    scaling_rad_frac: float = 0.05       # f_rad: radiative fraction of background (Eq. 4)
+    scaling_rad_frac: Union[float, str] = 0.05  # f_rad: float or mass-dependent expression in m [GeV] (Eq. 4)
     ann: Optional["ANNConfig"] = None    # ANN scorer config; if set, ann_score available in selections
     run_label: str = ""                  # set automatically by --per-file; used to key JSON outputs
     hit_cat_file: str = ""               # path to hit-category fraction table (run L1L1 L1L2 L2L1 L2L2 Other)
     hit_cat_ref_run: int = 0             # reference run for hit-category SF (SF = frac(run)/frac(ref))
     hit_cat_poly_order: int = -1         # degree of polynomial SF fit; -1 = use closest-run lookup
+    target_lumi: Optional[float] = None  # if set, produce a second set of plots scaled to this luminosity [pb^-1]
 
 
 def load_config(path: str) -> Config:
@@ -293,10 +376,20 @@ def load_config(path: str) -> Config:
         hit_cat_file=raw.get("hit_cat_file", ""),
         hit_cat_ref_run=raw.get("hit_cat_ref_run", 0),
         hit_cat_poly_order=raw.get("hit_cat_poly_order", -1),
+        target_lumi=raw.get("target_lumi", None),
     )
 
     for s in raw.get("samples", []):
+        s = dict(s)
+        weight_scan_raw = s.pop("weight_scan", [])
+        eps2_scan_raw   = s.pop("eps2_scan", None)
+        simp_raw        = s.pop("simp", None)
         sample = SampleConfig(**s)
+        sample.weight_scan = [WeightScanEntry(**e) for e in weight_scan_raw]
+        if eps2_scan_raw is not None:
+            sample.eps2_scan = Eps2ScanConfig(**eps2_scan_raw)
+        if simp_raw is not None:
+            sample.simp = SimpConfig(**simp_raw)
         if not sample.tree:
             sample.tree = config.tree
         config.samples.append(sample)

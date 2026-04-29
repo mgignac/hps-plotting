@@ -1,0 +1,206 @@
+tree: "preselection"
+output_dir: "plots/abcd_ap_simple/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+
+scaling_rad_frac: 0.05097
+
+aliases:
+  vertex_mass: "vertex./vertex.invM_"
+  vertex_z:    "vertex./vertex.pos_.fZ"
+
+# ---------------------------------------------------------------------------
+# Samples
+# ---------------------------------------------------------------------------
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Data (2021)"
+    color: "black"
+
+  # ctau [mm] = 8.109e-8 / (ε² × m_MeV)
+  - name: ap_90
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap90MeV
+    sample_type: signal
+    label: "A' 90 MeV"
+    color: "#dba134"
+    ap_mass: 0.090
+    weight: "weight"
+    weight_scan:
+      - label: "ap90_eps2_1e-10"
+        epsilon_sq: 1.0e-10
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 9.010)) / (true_ap_betagamma * 9.010)"
+        color: "#4a0080"
+      - label: "ap90_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.9010)) / (true_ap_betagamma * 0.9010)"
+        color: "#dba134"
+      - label: "ap90_eps2_1e-8"
+        epsilon_sq: 1.0e-8
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.09010)) / (true_ap_betagamma * 0.09010)"
+        color: "#f0c060"
+
+  - name: ap_120
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap120MeV
+    sample_type: signal
+    label: "A' 120 MeV"
+    color: "#dba134"
+    ap_mass: 0.120
+    weight: "weight"
+    weight_scan:
+      - label: "ap120_eps2_1e-10"
+        epsilon_sq: 1.0e-10
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 6.758)) / (true_ap_betagamma * 6.758)"
+        color: "#4a0080"
+      - label: "ap120_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.6758)) / (true_ap_betagamma * 0.6758)"
+        color: "#dba134"
+      - label: "ap120_eps2_1e-8"
+        epsilon_sq: 1.0e-8
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.06758)) / (true_ap_betagamma * 0.06758)"
+        color: "#f0c060"
+
+  - name: ap_180
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap180MeV
+    sample_type: signal
+    label: "A' 180 MeV"
+    color: "#dba134"
+    ap_mass: 0.180
+    weight: "weight"
+    weight_scan:
+      - label: "ap180_eps2_1e-10"
+        epsilon_sq: 1.0e-10
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 4.505)) / (true_ap_betagamma * 4.505)"
+        color: "#4a0080"
+      - label: "ap180_eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.4505)) / (true_ap_betagamma * 0.4505)"
+        color: "#dba134"
+      - label: "ap180_eps2_1e-8"
+        epsilon_sq: 1.0e-8
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.04505)) / (true_ap_betagamma * 0.04505)"
+        color: "#f0c060"
+
+# ---------------------------------------------------------------------------
+# Regions
+# ---------------------------------------------------------------------------
+regions:
+  - name: inclusive
+    selection: "vertex_mass > 0.0"
+    label: "Inclusive"
+
+  - name: L1L1
+    selection: "isL1L1"
+    label: "L1L1"
+
+# ---------------------------------------------------------------------------
+# Plots
+# ---------------------------------------------------------------------------
+plots:
+
+  # --- Full mass scan (data only, inclusive) --------------------------------
+  - name: abcd_inclusive
+    plot_type: abcd
+    samples: [data]
+    regions: [inclusive]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      mass_scan_min:  0.030
+      mass_scan_max:  0.250
+      mass_scan_step: 0.003
+      mass_window_half_width: 0.005
+      sideband_gap:           0.002
+      sideband_width:         0.010
+      z_signal_min:  0.2
+      z_signal_max:  1.0e+9
+      z_control_min: 0.0
+      z_control_max: 0.2
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true
+      sr_sigmas:  1.5
+      gap_sigmas: 0.5
+      sb_sigmas:  3.5
+      mass_resolution:
+        L1L1: "0.0025169 - 0.0133 * m + 0.137 * m**2"
+        L1L2: "0.001802  - 0.0005 * m + 0.0872 * m**2"
+        L2L2: "0.0021272 - 0.0065 * m + 0.110  * m**2"
+        L2L3: "0.0037686 - 0.0289 * m + 0.203  * m**2"
+        L3L3: "0.0024227 - 0.0057 * m + 0.150  * m**2"
+      json_output: "plots/abcd_ap_simple/results_inclusive.json"
+      lumi_projections:
+        - label: "10× dataset"
+          scale_factor: 10.0
+        - label: "100× projection"
+          scale_factor: 100.0
+
+  # --- Differential ABCD at 120 MeV, inclusive + L1L1 ----------------------
+  - name: abcd_120
+    plot_type: abcd
+    samples: [data, ap_120]
+    regions: [inclusive, L1L1]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      mass_scan_min:  0.120
+      mass_scan_max:  0.120
+      mass_scan_step: 0.003
+      mass_window_half_width: 0.004397
+      sideband_gap:           0.001466
+      sideband_width:         0.010259
+      z_signal_min:  0.2
+      z_signal_max:  1.0e+9
+      z_control_min: 0.0
+      z_control_max: 0.2
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true
+      json_output: "plots/abcd_ap_simple/results_120.json"
+#     signal_norm_region: "inclusive"
+
+  # --- Differential ABCD at 90 MeV, inclusive + L1L1 -----------------------
+  - name: abcd_90
+    plot_type: abcd
+    samples: [data, ap_90]
+    regions: [inclusive, L1L1]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      mass_scan_min:  0.090
+      mass_scan_max:  0.090
+      mass_scan_step: 0.003
+      mass_window_half_width: 0.003650
+      sideband_gap:           0.001217
+      sideband_width:         0.008516
+      z_signal_min:  0.2
+      z_signal_max:  1.0e+9
+      z_control_min: 0.0
+      z_control_max: 0.2
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true
+      json_output: "plots/abcd_ap_simple/results_90.json"
+#     signal_norm_region: "inclusive"
+
+  # --- Differential ABCD at 180 MeV, inclusive + L1L1 ----------------------
+  - name: abcd_180
+    plot_type: abcd
+    samples: [data, ap_180]
+    regions: [inclusive, L1L1]
+    abcd:
+      mass_variable: "vertex_mass"
+      z_variable:    "min_y0"
+      mass_scan_min:  0.180
+      mass_scan_max:  0.180
+      mass_scan_step: 0.003
+      mass_window_half_width: 0.006782
+      sideband_gap:           0.002261
+      sideband_width:         0.015824
+      z_signal_min:  0.2
+      z_signal_max:  1.0e+9
+      z_control_min: 0.0
+      z_control_max: 0.2
+      x_label: "$m_{e^+e^-}$ [GeV]"
+      log_y: true
+      json_output: "plots/abcd_ap_simple/results_180.json"
+#     signal_norm_region: "inclusive"

@@ -14,7 +14,7 @@ Usage in results.py:
     # Load data once
     n_data = count_data_in_window(data_cfg, region_cfg, mass_var, hw, aliases)
     # Per signal sample
-    scale = compute_eq4_scale(signal_cfg, n_data, region_cfg, aliases)
+    scale = compute_signal_scale_factor(signal_cfg, n_data, region_cfg, aliases)
 """
 
 import logging
@@ -29,6 +29,63 @@ logger = logging.getLogger(__name__)
 
 ALPHA_EM = 1.0 / 137.036  # fine structure constant (N_eff = 1)
 
+# ---------------------------------------------------------------------------
+# Radiative fraction and prompt yield — Sarah, HPS collaboration.
+# Generalized from the original to accept an arbitrary mass-window width
+# (delta_m) in place of the hardcoded 0.001 GeV constant.
+# ---------------------------------------------------------------------------
+
+def sarah_rad_frac(mass_gev, mode="pol"):
+    """Radiative fraction f_rad(m) — Sarah, HPS collaboration.
+
+    Parameters
+    ----------
+    mass_gev : float
+        A' mass [GeV].
+    mode : str
+        ``'pol'``   — 5th-order polynomial fit (default).
+        ``'const'`` — constant fit (par0 = 0.05097).
+    """
+    if mode == "const":
+        return 0.05097234
+    return (
+        -1.28948684e-01
+        + 7.49564672e+00 * mass_gev
+        - 1.18467019e+02 * mass_gev**2
+        + 8.86483892e+02 * mass_gev**3
+        - 3.13954474e+03 * mass_gev**4
+        + 4.22677239e+03 * mass_gev**5
+    )
+
+
+def sarah_prompt_yield(mass_gev, eps2, n_data, delta_m, rad_frac):
+    """Expected prompt signal yield in a mass window (Eq. 4, PhysRevD.108.012015).
+
+    Sarah, HPS collaboration.  Generalized from the original (which used a
+    fixed 0.001 GeV window) to accept an arbitrary full window width *delta_m*,
+    and accepts a pre-evaluated *rad_frac* so the caller controls how f_rad
+    is computed.
+
+    Parameters
+    ----------
+    mass_gev : float
+        A' pole mass [GeV].
+    eps2 : float
+        Kinetic mixing coupling ε².
+    n_data : float
+        Data event count in the mass window.
+    delta_m : float
+        Full mass window width [GeV].
+    rad_frac : float
+        Radiative fraction f_rad, evaluated at *mass_gev* by the caller.
+    """
+    if mass_gev < 0.001 or mass_gev > 4.0:
+        raise ValueError(
+            "Mass outside expected range — check unit conversion. "
+            "mass_gev should be in GeV."
+        )
+    return rad_frac * (3.0 * np.pi * eps2) / (2.0 * ALPHA_EM) * (mass_gev / delta_m) * n_data
+
 
 def count_data_in_window(
     data_cfg,
@@ -41,7 +98,7 @@ def count_data_in_window(
     """Count data events in [ap_mass ± mass_window_half_width] within the scaling region.
 
     Called once per run; the result is cached by the caller and passed to
-    every :func:`compute_eq4_scale` call.
+    every :func:`compute_signal_scale_factor` call.
 
     Returns
     -------
@@ -80,7 +137,7 @@ def count_data_in_window(
     return n_data
 
 
-def compute_eq4_scale(
+def compute_signal_scale_factor(
     signal_cfg,
     n_data_window,
     scaling_region_cfg,
@@ -108,8 +165,9 @@ def compute_eq4_scale(
         Global aliases from the top-level config.
     mass_window_half_width : float
         Half-width hw [GeV] used to count N_bin; δm_A' = 2 × hw.
-    rad_frac : float
-        Radiative fraction f_rad (fraction of background from radiative processes).
+    rad_frac : float or str
+        Radiative fraction f_rad.  May be a plain float or a string expression
+        in ``m`` (mass in GeV); the expression is evaluated at ``ap_mass``.
 
     Returns
     -------
@@ -124,6 +182,11 @@ def compute_eq4_scale(
             f"Signal sample '{signal_cfg.name}' needs ap_mass and epsilon_sq "
             "for Eq. 4 scaling."
         )
+
+    if isinstance(rad_frac, str):
+        rad_frac = float(safe_evaluate(rad_frac, {"m": np.array([ap_mass])}))
+
+    rad_frac_val = float(rad_frac)
 
     # ------------------------------------------------------------------ #
     # Sum weighted signal MC yield in the scaling region                  #
@@ -189,14 +252,11 @@ def compute_eq4_scale(
         return 0.0
 
     # ------------------------------------------------------------------ #
-    # Apply Eq. 4:  S_bin = f_rad × N_bin × (3πε²)/(2α) × m_A'/δm_A'   #
+    # Apply Eq. 4 via sarah_prompt_yield()                               #
     # ------------------------------------------------------------------ #
     delta_m = 2.0 * mass_window_half_width
-    n_signal_expected = (
-        rad_frac
-        * n_data_window
-        * (3.0 * np.pi * epsilon_sq) / (2.0 * ALPHA_EM)
-        * ap_mass / delta_m
+    n_signal_expected = sarah_prompt_yield(
+        ap_mass, epsilon_sq, n_data_window, delta_m, rad_frac_val,
     )
     scale_factor = n_signal_expected / n_mc_scaling
 
@@ -205,7 +265,7 @@ def compute_eq4_scale(
         "f_rad=%.3f, δm=%.4f GeV, N_bin=%.0f, N_mc=%.4g, "
         "S_bin=%.4g → scale=%.4g",
         signal_cfg.name, ap_mass, epsilon_sq,
-        rad_frac, delta_m, n_data_window, n_mc_scaling,
+        rad_frac_val, delta_m, n_data_window, n_mc_scaling,
         n_signal_expected, scale_factor,
     )
 

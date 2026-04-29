@@ -1,0 +1,373 @@
+tree: "preselection"
+output_dir: "plots/signal_eps2_scan_120/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+target_lumi: 161.0  # pb^-1; full 2021 dataset luminosity
+
+# Eq. 4 data-driven normalization baked into each weight_scan entry.
+# N_expected = f_rad * N_data(mass window) * (3π ε²)/(2α) * m/δm
+# Scale = N_expected / N_mc_total(preselection)
+# Values computed from v8 data (N_data=1,228,367 in [0.115,0.125] GeV, no z cut)
+# f_rad=0.05, m=120 MeV, δm=10 MeV.  ctau[mm] = 8.109e-8 / (ε² × 120).
+
+scaling_rad_frac: 0.05097
+
+aliases:
+  vertex_mass:    "vertex./vertex.invM_"
+  vtx_z:          "vertex./vertex.pos_.fZ"
+  vtx_x:          "vertex./vertex.pos_.fX"
+  vtx_y:          "vertex./vertex.pos_.fY"
+  vtx_chi2:       "vertex./vertex.chi2_"
+  vtx_prob:       "vertex./vertex.probability_"
+  ele_px:         "ele./ele.px_"
+  ele_py:         "ele./ele.py_"
+  ele_pz:         "ele./ele.pz_"
+  pos_px:         "pos./pos.px_"
+  pos_py:         "pos./pos.py_"
+  pos_pz:         "pos./pos.pz_"
+  ele_nhits:      "ele./ele.track_/ele.track_.n_hits_"
+  pos_nhits:      "pos./pos.track_/pos.track_.n_hits_"
+  ele_chi2:       "ele./ele.track_/ele.track_.chi2_"
+  pos_chi2:       "pos./pos.track_/pos.track_.chi2_"
+  ele_d0:         "ele./ele.track_/ele.track_.d0_"
+  pos_d0:         "pos./pos.track_/pos.track_.d0_"
+  ele_z0:         "ele./ele.track_/ele.track_.z0_"
+  pos_z0:         "pos./pos.track_/pos.track_.z0_"
+  ele_track_time: "ele./ele.track_/ele.track_.track_time_"
+  pos_track_time: "pos./pos.track_/pos.track_.track_time_"
+  ele_clus_energy: "ele./ele.cluster_/ele.cluster_.energy_"
+  pos_clus_energy: "pos./pos.cluster_/pos.cluster_.energy_"
+  ele_clus_time:  "ele./ele.cluster_/ele.cluster_.time_"
+  pos_clus_time:  "pos./pos.cluster_/pos.cluster_.time_"
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Data (2021, 1%)"
+    color: "black"
+
+  # Signal MC loaded once; 6 ε² points via weight_scan.
+  # Per-event weight = MC_weight × 1500 × exp(-(z-z_tgt)/(βγ cτ)) / (βγ cτ)
+  # then multiplied by the Eq. 4 scale = N_expected / N_mc_total(presel).
+  - name: ap120_scan
+    directory: /sdf/data/hps/physics2021/preselection/v8/ap_signal_smeared/ap120MeV
+    sample_type: signal
+    label: "A' 120 MeV"
+    color: "#888888"
+    ap_mass: 0.120
+    scale: 1.0
+    weight: "1.0"
+    weight_scan:
+      # ε²=1e-10  cτ=6.758 mm  N_exp=0.048  scale=1.177e-8
+      - label: "eps2_1e-10"
+        epsilon_sq: 1.0e-10
+        color: "#313695"
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 6.7575)) / (true_ap_betagamma * 6.7575) * 1.177e-8"
+
+      # ε²=3.16e-10  cτ=2.138 mm  N_exp=0.150  scale=1.672e-8
+      - label: "eps2_3.16e-10"
+        epsilon_sq: 3.16e-10
+        color: "#4575b4"
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 2.1384)) / (true_ap_betagamma * 2.1384) * 1.672e-8"
+
+      # ε²=1e-9  cτ=0.676 mm  N_exp=0.476  scale=3.376e-8
+      - label: "eps2_1e-9"
+        epsilon_sq: 1.0e-9
+        color: "#74add1"
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.6757)) / (true_ap_betagamma * 0.6757) * 3.376e-8"
+
+      # ε²=3.16e-9  cτ=0.214 mm  N_exp=1.50  scale=9.163e-8
+      - label: "eps2_3.16e-9"
+        epsilon_sq: 3.16e-9
+        color: "#fee090"
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.2138)) / (true_ap_betagamma * 0.2138) * 9.163e-8"
+
+      # ε²=1e-8  cτ=0.068 mm  N_exp=4.76  scale=2.809e-7
+      - label: "eps2_1e-8"
+        epsilon_sq: 1.0e-8
+        color: "#f46d43"
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.0676)) / (true_ap_betagamma * 0.0676) * 2.809e-7"
+
+      # ε²=3.16e-8  cτ=0.021 mm  N_exp=15.0  scale=8.925e-7
+      - label: "eps2_3.16e-8"
+        epsilon_sq: 3.16e-8
+        color: "#d73027"
+        weight: "weight * 1500.0 * exp(-(true_ap.vtx_z_ + 1.1) / (true_ap_betagamma * 0.02138)) / (true_ap_betagamma * 0.02138) * 8.925e-7"
+
+regions:
+  - name: preselection
+    selection: "vertex_mass > 0.0"
+    label: "Preselection"
+
+histograms:
+  - name: vertex_mass
+    variable: vertex_mass
+    bins: 60
+    x_min: 0.0
+    x_max: 0.2
+    x_label: "$m_{e^+e^-}$ [GeV]"
+
+  - name: vertex_mass_zoom
+    variable: vertex_mass
+    bins: 40
+    x_min: 0.10
+    x_max: 0.14
+    x_label: "$m_{e^+e^-}$ [GeV]"
+
+  - name: vtx_chi2
+    variable: vtx_chi2
+    bins: 50
+    x_min: 0.0
+    x_max: 20.0
+    x_label: "$\\chi^2_{vtx}$"
+
+  - name: vtx_prob
+    variable: vtx_prob
+    bins: 50
+    x_min: 0.0
+    x_max: 1.0
+    x_label: "Vertex probability"
+
+  - name: vtx_x
+    variable: vtx_x
+    bins: 50
+    x_min: -2.0
+    x_max: 2.0
+    x_label: "$x_{vtx}$ [mm]"
+
+  - name: vtx_y
+    variable: vtx_y
+    bins: 50
+    x_min: -0.5
+    x_max: 0.5
+    x_label: "$y_{vtx}$ [mm]"
+    log_y: true
+
+  - name: vtx_z
+    variable: vtx_z
+    bins: 50
+    x_min: -20.0
+    x_max: 100.0
+    x_label: "$z_{vtx}$ [mm]"
+    log_y: true
+
+  - name: min_y0
+    variable: min_y0
+    bins: 50
+    x_min: 0.0
+    x_max: 1.0
+    x_label: "min $|y_0|$ [mm]"
+    log_y: true
+
+  - name: vtx_proj_sig
+    variable: vtx_proj_sig
+    bins: 50
+    x_min: 0.0
+    x_max: 15.0
+    x_label: "Vertex projection significance"
+    log_y: true
+
+  - name: psum
+    variable: psum
+    bins: 50
+    x_min: 0.0
+    x_max: 6.0
+    x_label: "$p_{e^-} + p_{e^+}$ [GeV]"
+
+  - name: ele_pz
+    variable: ele_pz
+    bins: 50
+    x_min: 0.0
+    x_max: 5.0
+    x_label: "$p_{z}^{e^-}$ [GeV]"
+
+  - name: ele_px
+    variable: ele_px
+    bins: 50
+    x_min: -0.1
+    x_max: 0.1
+    x_label: "$p_{x}^{e^-}$ [GeV]"
+
+  - name: ele_py
+    variable: ele_py
+    bins: 50
+    x_min: -0.1
+    x_max: 0.1
+    x_label: "$p_{y}^{e^-}$ [GeV]"
+
+  - name: ele_nhits
+    variable: ele_nhits
+    bins: 15
+    x_min: 0
+    x_max: 15
+    x_label: "$N_{hits}^{e^-}$"
+
+  - name: ele_chi2
+    variable: ele_chi2
+    bins: 50
+    x_min: 0.0
+    x_max: 50.0
+    x_label: "Track $\\chi^2$ ($e^-$)"
+
+  - name: ele_d0
+    variable: ele_d0
+    bins: 50
+    x_min: -5.0
+    x_max: 5.0
+    x_label: "$d_0^{e^-}$ [mm]"
+
+  - name: ele_z0
+    variable: ele_z0
+    bins: 50
+    x_min: -1.0
+    x_max: 1.0
+    x_label: "$z_0^{e^-}$ [mm]"
+    log_y: true
+
+  - name: pos_pz
+    variable: pos_pz
+    bins: 50
+    x_min: 0.0
+    x_max: 5.0
+    x_label: "$p_{z}^{e^+}$ [GeV]"
+
+  - name: pos_px
+    variable: pos_px
+    bins: 50
+    x_min: -0.1
+    x_max: 0.1
+    x_label: "$p_{x}^{e^+}$ [GeV]"
+
+  - name: pos_py
+    variable: pos_py
+    bins: 50
+    x_min: -0.1
+    x_max: 0.1
+    x_label: "$p_{y}^{e^+}$ [GeV]"
+
+  - name: pos_nhits
+    variable: pos_nhits
+    bins: 15
+    x_min: 0
+    x_max: 15
+    x_label: "$N_{hits}^{e^+}$"
+
+  - name: pos_chi2
+    variable: pos_chi2
+    bins: 50
+    x_min: 0.0
+    x_max: 50.0
+    x_label: "Track $\\chi^2$ ($e^+$)"
+
+  - name: pos_d0
+    variable: pos_d0
+    bins: 50
+    x_min: -5.0
+    x_max: 5.0
+    x_label: "$d_0^{e^+}$ [mm]"
+
+  - name: pos_z0
+    variable: pos_z0
+    bins: 50
+    x_min: -1.0
+    x_max: 1.0
+    x_label: "$z_0^{e^+}$ [mm]"
+    log_y: true
+
+  - name: ele_clus_energy
+    variable: ele_clus_energy
+    bins: 50
+    x_min: 0.0
+    x_max: 5.0
+    x_label: "$E_{clus}^{e^-}$ [GeV]"
+
+  - name: pos_clus_energy
+    variable: pos_clus_energy
+    bins: 50
+    x_min: 0.0
+    x_max: 5.0
+    x_label: "$E_{clus}^{e^+}$ [GeV]"
+
+  - name: ele_track_time
+    variable: ele_track_time
+    bins: 50
+    x_min: -20.0
+    x_max: 20.0
+    x_label: "Track time ($e^-$) [ns]"
+
+  - name: pos_track_time
+    variable: pos_track_time
+    bins: 50
+    x_min: -20.0
+    x_max: 20.0
+    x_label: "Track time ($e^+$) [ns]"
+
+  - name: ele_clus_time
+    variable: ele_clus_time
+    bins: 60
+    x_min: -60.0
+    x_max: 60.0
+    x_label: "Cluster time ($e^-$) [ns]"
+    log_y: true
+
+  - name: pos_clus_time
+    variable: pos_clus_time
+    bins: 50
+    x_min: 0.0
+    x_max: 100.0
+    x_label: "Cluster time ($e^+$) [ns]"
+
+  - name: clus_dt
+    variable: "ele_clus_time - pos_clus_time"
+    bins: 50
+    x_min: -20.0
+    x_max: 20.0
+    x_label: "$t_{clus}^{e^-} - t_{clus}^{e^+}$ [ns]"
+    log_y: true
+
+plots:
+  - name: overlay_eps2_scan
+    plot_type: overlay
+    normalize: false
+    data_sample: data
+    histograms:
+      - vertex_mass
+      - vertex_mass_zoom
+      - vtx_z
+      - vtx_y
+      - vtx_x
+      - vtx_chi2
+      - vtx_prob
+      - min_y0
+      - vtx_proj_sig
+      - psum
+      - ele_pz
+      - ele_px
+      - ele_py
+      - ele_nhits
+      - ele_chi2
+      - ele_d0
+      - ele_z0
+      - pos_pz
+      - pos_px
+      - pos_py
+      - pos_nhits
+      - pos_chi2
+      - pos_d0
+      - pos_z0
+      - ele_clus_energy
+      - pos_clus_energy
+      - ele_track_time
+      - pos_track_time
+      - ele_clus_time
+      - pos_clus_time
+      - clus_dt
+    regions: [preselection]
+    samples:
+      - eps2_1e-10
+      - eps2_3.16e-10
+      - eps2_1e-9
+      - eps2_3.16e-9
+      - eps2_1e-8
+      - eps2_3.16e-8

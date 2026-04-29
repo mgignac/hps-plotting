@@ -1,5 +1,5 @@
 tree: "preselection"
-output_dir: "plots/badrun_14272/"
+output_dir: "plots/pCorrectedData/"
 output_format: "pdf"
 lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
 
@@ -37,14 +37,14 @@ aliases:
 
 samples:
   - name: data
-    directory: /sdf/data/hps/physics2021/preselection/v8/data_5pc
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_1pc_pScaleCorr
     sample_type: data
     label: "Data"
     color: "black"
     weight: "1.0"
     scale: 1.0
-    run_min: 14272 #14282
-    run_max: 14272 #14282
+    run_min: 14200 #14282 #14282
+    run_max: 14200 #14282 #14282
 
   - name: tridents
     directory: /sdf/data/hps/physics2021/preselection/v8/tritrig_z0calib_smeared/
@@ -134,7 +134,7 @@ histograms:
 
   # Momentum sum
   - name: psum
-    variable: psum
+    variable: psum_scalar #psum
     bins: 24
     x_min: 3.0
     x_max: 4.2

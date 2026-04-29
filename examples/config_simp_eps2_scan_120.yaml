@@ -1,0 +1,78 @@
+tree: "preselection"
+output_dir: "plots/simp_eps2_scan_120/"
+output_format: "pdf"
+lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
+scaling_rad_frac: 0.05097
+
+# SIMP signal scan at m_A' = 120 MeV.
+#
+# The dedicated SIMP MC has truth branches for the dark vector (V_D):
+#   true_vd.vtx_z_      — decay vertex z of V_D [mm]
+#   true_vd_betagamma   — βγ of V_D
+#
+# Per-event weight for ε² point i:
+#   w = base_weight × gen_length × (rho_frac × lt_ρ + phi_frac × lt_φ)
+#
+# where lt_V = exp(-Δz / (βγ·cτ_V)) / (βγ·cτ_V).
+# cτ_V is computed from the dark sector model in simp_scaling.py.
+# Eq. 4 normalization (f_rad × N_data × (3πε²/2α) × m/δm) is unchanged.
+
+samples:
+  - name: data
+    directory: /sdf/data/hps/physics2021/preselection/v8/data_1pc_z0_calb_run_by_run
+    sample_type: data
+    label: "Data (2021, 1%)"
+    color: "black"
+
+  - name: simp120_scan
+    directory: /path/to/simp/mc/simp120MeV   # TODO: update to actual SIMP MC path
+    sample_type: signal
+    signal_type: simp
+    label: "SIMP 120 MeV"
+    ap_mass: 0.120
+    scale: 1.0
+    weight: "1.0"
+    eps2_scan:
+      eps2_values: [1.0e-10, 3.16e-10, 1.0e-9, 3.16e-9, 1.0e-8]
+      z_branch: "true_vd.vtx_z_"
+      betagamma_branch: "true_vd_betagamma"
+      gen_length_mm: 1500.0
+      target_z_mm: -1.1
+      base_weight: "weight"
+    simp:
+      alpha_d: 0.01
+      vd_mass_ratio: 0.6
+      pid_mass_ratio: 0.3333
+
+regions:
+  - name: preselection
+    selection: "vertex_mass > 0.0"
+    label: "Preselection"
+
+histograms:
+  - name: vertex_mass
+    variable: vertex_mass
+    bins: 60
+    x_min: 0.0
+    x_max: 0.2
+    x_label: "$m_{e^+e^-}$ [GeV]"
+
+  - name: vtx_z
+    variable: vtx_z
+    bins: 50
+    x_min: -20.0
+    x_max: 100.0
+    x_label: "$z_{vtx}$ [mm]"
+    log_y: true
+
+plots:
+  - name: overlay_simp_scan
+    plot_type: overlay
+    normalize: false
+    data_sample: data
+    histograms:
+      - vertex_mass
+      - vtx_z
+    regions: [preselection]
+    samples:
+      - simp120_scan

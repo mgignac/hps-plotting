@@ -24,6 +24,8 @@ from .style import add_hps_label
 from ..region import Region
 from ..sample import Sample, compute_luminosity
 from ..utils import safe_evaluate, extract_branch_names
+from .. import simp_scaling
+from ..signal_scaling import sarah_prompt_yield
 
 logger = logging.getLogger(__name__)
 
@@ -96,10 +98,11 @@ def _count_abcd(mass_arr, z_arr, mass_center, hw, gap, sw, abcd_cfg, weights=Non
         return s, e
 
     return {
-        "A": _sum(mass_sig & z_sig),
-        "B": _sum(mass_sig & z_ctrl),
-        "C": _sum(mass_sb  & z_sig),
-        "D": _sum(mass_sb  & z_ctrl),
+        "A":         _sum(mass_sig & z_sig),
+        "B":         _sum(mass_sig & z_ctrl),
+        "C":         _sum(mass_sb  & z_sig),
+        "D":         _sum(mass_sb  & z_ctrl),
+        "mass_only": _sum(mass_sig),          # mass window only, no z cut — used for Eq. 4
     }
 
 
@@ -213,6 +216,7 @@ def _count_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg):
     n = len(mass_centers)
     na, na_err = np.zeros(n), np.zeros(n)
     nb, nc, nd = np.zeros(n), np.zeros(n), np.zeros(n)
+    n_mass_only = np.zeros(n)  # mass window only, no z cut — Eq. 4 numerator for data
 
     for i, mc in enumerate(mass_centers):
         hw, gap, sw = _compute_window(abcd_cfg, region.name, mc)
@@ -221,6 +225,7 @@ def _count_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg):
         nb[i]            = c["B"][0]
         nc[i]            = c["C"][0]
         nd[i]            = c["D"][0]
+        n_mass_only[i]   = c["mass_only"][0]
 
         if nd[i] > 0:
             est = nb[i] * nc[i] / nd[i]
@@ -253,7 +258,525 @@ def _count_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg):
 
     logger.info("Counted %s: N_A=%.1f  (total over %d mass bins)",
                 region.name, na.sum(), n)
-    return {"na": na, "na_err": na_err, "nb": nb, "nc": nc, "nd": nd}
+    return {"na": na, "na_err": na_err, "nb": nb, "nc": nc, "nd": nd,
+            "n_mass_only": n_mass_only}
+
+
+_ALPHA_EM = 1.0 / 137.036
+
+
+def _eval_rad_frac(rad_frac, mass_center):
+    """Return the radiative fraction at *mass_center* [GeV].
+
+    *rad_frac* may be a plain float or a string expression in ``m`` (mass in GeV).
+    """
+    if isinstance(rad_frac, str):
+        return float(safe_evaluate(rad_frac, {"m": np.array([mass_center])}))
+    return float(rad_frac)
+
+
+def _count_signal_scan_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg,
+                                 rad_frac, n_data_mass_only, norm_region=None,
+                                 data_mass_arr_norm=None):
+    """Compute per-eps² signal yields in region A with Eq. 4 scaling.
+
+    Handles both ``weight_scan`` entries (explicit weight expressions) and
+    ``eps2_scan`` (numerical lifetime reweighting, cτ derived from ε² and ap_mass).
+
+    Returns list of dicts, one per (eps2, label):
+        label, ap_mass, eps2, n_mc_a, n_mc_total, nsig, norm_region, window_scan
+    """
+    has_ws = bool(sample_cfg.weight_scan)
+    has_e2 = sample_cfg.eps2_scan is not None
+    if not has_ws and not has_e2:
+        return []
+
+    data        = raw["data"]
+    total_scale = raw["total_scale"]
+    ap_mass     = sample_cfg.ap_mass
+    eff_norm    = norm_region if norm_region is not None else region
+
+    # --- masks and kinematic arrays -----------------------------------------
+    abcd_mask = region.apply(data)
+    if sample_cfg.selection:
+        abcd_mask = abcd_mask & np.asarray(safe_evaluate(sample_cfg.selection, data), dtype=bool)
+
+    mass_arr_abcd = np.asarray(safe_evaluate(abcd_cfg.mass_variable, data, mask=abcd_mask), dtype=float)
+    z_arr_abcd    = np.asarray(safe_evaluate(abcd_cfg.z_variable,    data, mask=abcd_mask), dtype=float)
+
+    norm_mask = eff_norm.apply(data)
+    if sample_cfg.selection:
+        norm_mask = norm_mask & np.asarray(safe_evaluate(sample_cfg.selection, data), dtype=bool)
+
+    mass_arr_norm = np.asarray(safe_evaluate(abcd_cfg.mass_variable, data, mask=norm_mask), dtype=float)
+    z_arr_norm    = np.asarray(safe_evaluate(abcd_cfg.z_variable,    data, mask=norm_mask), dtype=float)
+
+    n = len(mass_centers)
+
+    # --- build scan items: (eps2, label, weights_abcd, weights_norm, verbose) -
+    # verbose=True  → emit per-mass-center INFO log (weight_scan, small N of entries)
+    # verbose=False → emit only the per-eps² summary line (eps2_scan, can be O(10s) of entries)
+    scan_items = []
+
+    for entry in sample_cfg.weight_scan:
+        if entry.epsilon_sq is None:
+            logger.debug("WeightScanEntry '%s' has no epsilon_sq — skipping Eq. 4.", entry.label)
+            continue
+        raw_w = safe_evaluate(entry.weight, data, mask=abcd_mask)
+        w = (np.full(int(np.sum(abcd_mask)), float(raw_w))
+             if np.ndim(raw_w) == 0 else np.asarray(raw_w, dtype=float))
+        wa = np.where(np.isfinite(w * total_scale) & (w * total_scale >= 0.0),
+                      w * total_scale, 0.0)
+        raw_w_n = safe_evaluate(entry.weight, data, mask=norm_mask)
+        w_n = (np.full(int(np.sum(norm_mask)), float(raw_w_n))
+               if np.ndim(raw_w_n) == 0 else np.asarray(raw_w_n, dtype=float))
+        wn = np.where(np.isfinite(w_n * total_scale) & (w_n * total_scale >= 0.0),
+                      w_n * total_scale, 0.0)
+        scan_items.append((entry.epsilon_sq, entry.label, wa, wn, True))
+
+    if has_e2:
+        es = sample_cfg.eps2_scan
+        if ap_mass is None:
+            logger.warning("eps2_scan on '%s' requires ap_mass to be set — skipping.", sample_cfg.name)
+        elif sample_cfg.signal_type == "simp":
+            # ---- SIMP path: dark vector lifetime reweighting ----------------
+            if sample_cfg.simp is None:
+                logger.warning(
+                    "signal_type='simp' on '%s' but no simp: config block — skipping SIMP scan.",
+                    sample_cfg.name,
+                )
+            else:
+                sc          = sample_cfg.simp
+                ap_mass_mev = ap_mass * 1000.0
+                m_pi_D, m_V_D, f_pi_D = simp_scaling.dark_masses(
+                    ap_mass_mev, sc.vd_mass_ratio, sc.pid_mass_ratio)
+                rho_frac, phi_frac = simp_scaling.dark_branching_fractions(
+                    sc.alpha_d, m_pi_D, m_V_D, f_pi_D, ap_mass_mev)
+
+                # Load dark-vector truth arrays (z and βγ of V_D, not A')
+                z_vd_a  = np.asarray(safe_evaluate(es.z_branch,         data, mask=abcd_mask), dtype=float)
+                bg_vd_a = np.asarray(safe_evaluate(es.betagamma_branch, data, mask=abcd_mask), dtype=float)
+                bw_a    = np.asarray(safe_evaluate(es.base_weight,      data, mask=abcd_mask), dtype=float) * total_scale
+
+                z_vd_n  = np.asarray(safe_evaluate(es.z_branch,         data, mask=norm_mask), dtype=float)
+                bg_vd_n = np.asarray(safe_evaluate(es.betagamma_branch, data, mask=norm_mask), dtype=float)
+                bw_n    = np.asarray(safe_evaluate(es.base_weight,      data, mask=norm_mask), dtype=float) * total_scale
+
+                logger.debug(
+                    "SIMP dark sector [m_A'=%.1f MeV, alpha_d=%.3g]: "
+                    "m_pi_D=%.2f MeV  m_V_D=%.2f MeV  f_pi_D=%.4g MeV  "
+                    "rho_frac=%.4f  phi_frac=%.4f  BR_vis=%.4f",
+                    ap_mass_mev, sc.alpha_d,
+                    m_pi_D, m_V_D, f_pi_D, rho_frac, phi_frac, rho_frac + phi_frac,
+                )
+
+                for eps2 in es.eps2_values:
+                    ctau_rho, ctau_phi = simp_scaling.dark_vector_ctau(
+                        sc.alpha_d, m_pi_D, m_V_D, f_pi_D, ap_mass_mev, eps2)
+                    wa = simp_scaling.simp_event_weights(
+                        z_vd_a, bg_vd_a, bw_a, es.gen_length_mm,
+                        ctau_rho, ctau_phi, rho_frac, phi_frac, es.target_z_mm)
+                    wn = simp_scaling.simp_event_weights(
+                        z_vd_n, bg_vd_n, bw_n, es.gen_length_mm,
+                        ctau_rho, ctau_phi, rho_frac, phi_frac, es.target_z_mm)
+                    logger.info(
+                        "  SIMP eps2=%.3g: ctau_rho=%.3g mm  ctau_phi=%.3g mm  "
+                        "n_events_abcd=%d  sum_weights_abcd=%.4g",
+                        eps2, ctau_rho, ctau_phi, len(wa), float(np.sum(wa)),
+                    )
+                    label = f"{sample_cfg.name}_simp_eps2_{eps2:.3e}"
+                    scan_items.append((eps2, label, wa, wn, False))
+        else:
+            # ---- standard A' eps2_scan (unchanged) --------------------------
+            ap_mass_mev = ap_mass * 1000.0
+            z_a  = np.asarray(safe_evaluate(es.z_branch,         data, mask=abcd_mask), dtype=float)
+            bg_a = np.asarray(safe_evaluate(es.betagamma_branch, data, mask=abcd_mask), dtype=float)
+            bw_a = np.asarray(safe_evaluate(es.base_weight,      data, mask=abcd_mask), dtype=float) * total_scale
+
+            z_n  = np.asarray(safe_evaluate(es.z_branch,         data, mask=norm_mask), dtype=float)
+            bg_n = np.asarray(safe_evaluate(es.betagamma_branch, data, mask=norm_mask), dtype=float)
+            bw_n = np.asarray(safe_evaluate(es.base_weight,      data, mask=norm_mask), dtype=float) * total_scale
+
+            for eps2 in es.eps2_values:
+                ctau = 8.109e-8 / (eps2 * ap_mass_mev)
+
+                sh_a = z_a - es.target_z_mm
+                L_a  = bg_a * ctau
+                with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+                    lt_a = np.where((sh_a >= 0) & (L_a > 0), np.exp(-sh_a / L_a) / L_a, 0.0)
+                wa = np.where(np.isfinite(bw_a * lt_a) & (bw_a * lt_a >= 0),
+                              bw_a * lt_a * es.gen_length_mm, 0.0)
+
+                sh_n = z_n - es.target_z_mm
+                L_n  = bg_n * ctau
+                with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+                    lt_n = np.where((sh_n >= 0) & (L_n > 0), np.exp(-sh_n / L_n) / L_n, 0.0)
+                wn = np.where(np.isfinite(bw_n * lt_n) & (bw_n * lt_n >= 0),
+                              bw_n * lt_n * es.gen_length_mm, 0.0)
+
+                label = f"{sample_cfg.name}_eps2_{eps2:.3e}"
+                scan_items.append((eps2, label, wa, wn, False))
+
+    # --- unified counting loop over all scan items --------------------------
+    norm_name = eff_norm.config.name
+
+    # Log normalisation setup once per sample so the user can see exactly what
+    # region selection and mass window are applied to both data and signal MC.
+    _snhw_fixed = abcd_cfg.signal_norm_hw  # None → uses per-bin ABCD hw
+    _snhw_desc  = (f"signal_norm_hw = ±{_snhw_fixed*1000:.2f} MeV (fixed)"
+                   if _snhw_fixed is not None
+                   else "signal_norm_hw = ±hw(m)  (follows ABCD window)")
+    logger.info(
+        "Signal norm setup for '%s':\n"
+        "  Norm region   : '%s'  selection = %s\n"
+        "  ABCD region   : '%s'  selection = %s\n"
+        "  Mass window   : %s\n"
+        "  N_data_mass_only per bin (data passing norm-region selection AND mass window):\n"
+        "    %s",
+        sample_cfg.name,
+        norm_name, eff_norm.config.selection,
+        region.config.name, region.config.selection,
+        _snhw_desc,
+        "  ".join(
+            f"m={mc*1000:.0f} MeV → N_data={n_data_mass_only[i]:.0f}"
+            for i, mc in enumerate(mass_centers)
+        ),
+    )
+
+    results   = []
+
+    for eps2_val, label, weights_abcd, weights_norm, verbose in scan_items:
+        n_mc_total     = float(np.sum(weights_norm))
+        n_mc_a         = np.zeros(n)
+        n_mc_mass_only = np.zeros(n)
+        nsig           = np.zeros(n)
+
+        for i, mc in enumerate(mass_centers):
+            hw, gap, sw = _compute_window(abcd_cfg, region.name, mc)
+            snhw = abcd_cfg.signal_norm_hw if abcd_cfg.signal_norm_hw is not None else hw
+
+            c_abcd = _count_abcd(mass_arr_abcd, z_arr_abcd, mc, hw, gap, sw, abcd_cfg, weights_abcd)
+            n_mc_a[i] = c_abcd["A"][0]
+
+            m_sig_n = (mass_arr_norm >= mc - snhw) & (mass_arr_norm <= mc + snhw)
+            n_mc_mass_only[i] = float(np.sum(weights_norm[m_sig_n]))
+
+            if n_mc_mass_only[i] > 0 and n_data_mass_only[i] > 0:
+                delta_m      = 2.0 * snhw
+                mass_hyp     = ap_mass if ap_mass is not None else mc
+                rad_frac_val = _eval_rad_frac(rad_frac, mc)
+                n_expected   = sarah_prompt_yield(mass_hyp, eps2_val, n_data_mass_only[i], delta_m, rad_frac_val)
+                scale        = n_expected / n_mc_mass_only[i]
+                nsig[i]      = n_mc_a[i] * scale
+                if verbose:
+                    eps_z = n_mc_a[i] / n_mc_mass_only[i]
+                    logger.info(
+                        "  [%s | m=%.0f MeV | eps2=%.3g]\n"
+                        "    Mass window   : [%.4f, %.4f] GeV  (hw=%.4f, delta_m=%.4f GeV)\n"
+                        "    z cut         : min_y0 in [%.3f, %.3g]\n"
+                        "    N_data_window : %.4g  (data in mass window, no z cut)\n"
+                        "    N_mc_A        : %.4g  (MC in mass window AND z-signal cut)\n"
+                        "    N_mc_window   : %.4g  (MC in mass window, no z cut)\n"
+                        "    N_mc_total    : %.4g  (MC in full norm region, no cuts)\n"
+                        "    eps_z         : %.4g  (N_mc_A / N_mc_window — z-cut efficiency)\n"
+                        "    f_rad         : %.4g\n"
+                        "    n_expected    : sarah_prompt_yield(...) = %.4g\n"
+                        "    scale         : n_expected / N_mc_window = %.4g\n"
+                        "    nsig          : N_mc_A * scale = %.4g",
+                        region.config.name, mc * 1000, eps2_val,
+                        mc - hw, mc + hw, hw, delta_m,
+                        abcd_cfg.z_signal_min, abcd_cfg.z_signal_max,
+                        n_data_mass_only[i], n_mc_a[i], n_mc_mass_only[i], n_mc_total,
+                        eps_z, rad_frac_val,
+                        n_expected, scale, nsig[i],
+                    )
+            elif verbose:
+                logger.info(
+                    "  [%s | m=%.0f MeV | eps2=%.3g]  SKIPPED: "
+                    "N_mc_window=%.4g  N_data_window=%.4g",
+                    region.config.name, mc * 1000, eps2_val,
+                    n_mc_mass_only[i], n_data_mass_only[i],
+                )
+
+        # Report the delta_m actually used. When signal_norm_hw is fixed it is
+        # constant; otherwise it is the ABCD hw at the sample's ap_mass (or the
+        # first mass centre as a representative value).
+        if abcd_cfg.signal_norm_hw is not None:
+            _rep_dm = 2.0 * abcd_cfg.signal_norm_hw
+        else:
+            _rep_mc = ap_mass if ap_mass is not None else mass_centers[0]
+            _rep_dm = 2.0 * _compute_window(abcd_cfg, region.name, _rep_mc)[0]
+        logger.info(
+            "Signal scan '%s' (eps2=%.3g) region '%s' [norm: '%s', delta_m=%.2f MeV]: "
+            "N_mc_total=%.3g  N_sig(summed)=%.3g",
+            label, eps2_val, region.config.name, norm_name, _rep_dm * 1000,
+            n_mc_total, float(np.sum(nsig)),
+        )
+
+        ws_results = []
+        if abcd_cfg.window_scan and data_mass_arr_norm is not None:
+            z_sig_mask = (z_arr_abcd >= abcd_cfg.z_signal_min) & (z_arr_abcd <= abcd_cfg.z_signal_max)
+            for hw_ws in abcd_cfg.window_scan:
+                nsig_ws_arr = np.zeros(n)
+                for i, mc in enumerate(mass_centers):
+                    mass_hyp   = ap_mass if ap_mass is not None else mc
+                    delta_m_ws = 2.0 * hw_ws
+                    n_data_ws  = float(np.sum(
+                        (data_mass_arr_norm >= mc - hw_ws) & (data_mass_arr_norm <= mc + hw_ws)
+                    ))
+                    m_sig_a    = (mass_arr_abcd >= mc - hw_ws) & (mass_arr_abcd <= mc + hw_ws)
+                    n_mc_a_ws  = float(np.sum(weights_abcd[m_sig_a & z_sig_mask]))
+                    m_sig_n    = (mass_arr_norm >= mc - hw_ws) & (mass_arr_norm <= mc + hw_ws)
+                    n_mc_win_ws= float(np.sum(weights_norm[m_sig_n]))
+                    if n_mc_win_ws > 0 and n_data_ws > 0:
+                        rad_frac_val   = _eval_rad_frac(rad_frac, mc)
+                        n_exp_ws       = sarah_prompt_yield(mass_hyp, eps2_val, n_data_ws, delta_m_ws, rad_frac_val)
+                        nsig_ws_arr[i] = n_mc_a_ws * (n_exp_ws / n_mc_win_ws)
+                ws_sum = float(np.sum(nsig_ws_arr))
+                ws_results.append({"hw_GeV": hw_ws, "nsig": ws_sum})
+                logger.info("    window_scan  hw=%.2f MeV → nsig=%.4g", hw_ws * 1000, ws_sum)
+
+        results.append({
+            "label":        label,
+            "ap_mass":      ap_mass,
+            "eps2":         eps2_val,
+            "n_mc_a":       n_mc_a,
+            "n_mc_total":   n_mc_total,
+            "nsig":         nsig,
+            "mass_centers": mass_centers,
+            "norm_region":  norm_name,
+            "window_scan":  ws_results,
+        })
+
+    return results
+
+
+def plot_signal_2d(signal_scan_cache, output_dir, output_format):
+    """2D heat map of expected signal yield N_sig(mass, ε²).
+
+    For each region in signal_scan_cache, builds a grid over unique (ap_mass, eps2)
+    pairs and plots log10(nsig) as a pcolormesh with contour lines at nsig = 0.1,
+    1, 10, 100.
+    """
+    for region_name, scan_entries in signal_scan_cache.items():
+        valid = [e for e in scan_entries
+                 if e.get("ap_mass") is not None and e.get("eps2") is not None]
+        if not valid:
+            continue
+
+        masses_sorted = sorted(set(e["ap_mass"] for e in valid))
+        eps2_sorted   = sorted(set(e["eps2"]    for e in valid))
+        if len(masses_sorted) < 2 or len(eps2_sorted) < 2:
+            logger.warning("signal_2d: not enough (mass, ε²) points for region '%s' — skipping.",
+                           region_name)
+            continue
+
+        masses_mev = np.array(masses_sorted) * 1000.0
+        eps2_arr   = np.array(eps2_sorted)
+        log_e      = np.log10(eps2_arr)
+
+        # Build grid: rows = eps2 (ascending), cols = mass (ascending)
+        # Use only the on-mass bin: the nsig element whose mass center is
+        # closest to entry["ap_mass"].  Summing over all mass centers would
+        # mix N_data from neighbouring bins (wrong physics).
+        nsig_grid = np.full((len(eps2_sorted), len(masses_sorted)), np.nan)
+        for entry in valid:
+            im = masses_sorted.index(entry["ap_mass"])
+            ie = eps2_sorted.index(entry["eps2"])
+            mc_arr = np.asarray(entry.get("mass_centers", []), dtype=float)
+            if len(mc_arr) > 0 and entry["ap_mass"] is not None:
+                i_ap = int(np.argmin(np.abs(mc_arr - entry["ap_mass"])))
+                nsig_grid[ie, im] = float(entry["nsig"][i_ap])
+            else:
+                nsig_grid[ie, im] = float(np.sum(entry["nsig"]))
+
+        # pcolormesh bin edges
+        dm = np.diff(masses_mev)
+        m_edges = np.concatenate([[masses_mev[0] - dm[0] / 2],
+                                   masses_mev[:-1] + dm / 2,
+                                   [masses_mev[-1] + dm[-1] / 2]])
+        de = np.diff(log_e)
+        e_edges = np.concatenate([[log_e[0] - de[0] / 2],
+                                   log_e[:-1] + de / 2,
+                                   [log_e[-1] + de[-1] / 2]])
+
+        log_nsig = np.where(nsig_grid > 0, np.log10(nsig_grid), np.nan)
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        pcm = ax.pcolormesh(m_edges, e_edges, log_nsig,
+                            cmap="viridis", vmin=-2, vmax=3)
+
+        cb = fig.colorbar(pcm, ax=ax, pad=0.02)
+        cb.set_label(r"$\log_{10}(N_{\rm sig})$", fontsize=11)
+        cb.set_ticks([-2, -1, 0, 1, 2, 3])
+        cb.set_ticklabels(["0.01", "0.1", "1", "10", "100", "1000"])
+
+        # Contour lines at nsig = 0.1, 1, 10, 100
+        contour_levels = [-1, 0, 1, 2]   # log10 of [0.1, 1, 10, 100]
+        contour_labels = {-1: "0.1", 0: "1", 1: "10", 2: "100"}
+        try:
+            cs = ax.contour(masses_mev, log_e, log_nsig,
+                            levels=contour_levels,
+                            colors=["white", "white", "white", "white"],
+                            linewidths=[0.8, 2.0, 0.8, 0.8],
+                            linestyles=["--", "-", "--", "--"])
+            ax.clabel(cs, fmt=contour_labels, fontsize=9, inline=True)
+        except Exception as exc:
+            logger.debug("signal_2d contour failed for region '%s': %s", region_name, exc)
+
+        ax.set_xlabel(r"$m_{A'}$ [MeV]", fontsize=12)
+        ax.set_ylabel(r"$\varepsilon^2$", fontsize=12)
+        ax.set_yticks(log_e)
+        ax.set_yticklabels(
+            [f"$10^{{{int(v)}}}$" if v == int(v) else f"$10^{{{v:.1f}}}$" for v in log_e]
+        )
+        ax.set_title(f"Signal yield $N_{{\\rm sig}}$ — {region_name}", fontsize=12)
+
+        outdir = Path(output_dir)
+        outdir.mkdir(parents=True, exist_ok=True)
+        fname = f"signal_2d_{region_name}.{output_format}"
+        fig.savefig(outdir / fname, bbox_inches="tight")
+        plt.close(fig)
+        logger.info("Saved 2D signal plot: %s", outdir / fname)
+
+
+def plot_data_yield_2d(signal_scan_cache, data_yield_cache, output_dir, output_format):
+    """2D diagnostic: data yield dN/dm in signal mass window vs (mass, ε²).
+
+    Builds the same (mass, ε²) grid as plot_signal_2d but fills every cell with
+    dN/dm = N_data_window / (2·hw).  Since data yield is independent of ε², every
+    row should be identical — this is the cross-check that the Eq. 4 normalization
+    is not accidentally ε²-dependent.
+    """
+    for region_name, scan_entries in signal_scan_cache.items():
+        if region_name not in data_yield_cache:
+            continue
+
+        yield_info = data_yield_cache[region_name]
+        n_data = yield_info["n_data_mass_only"]
+        mass_centers = yield_info["mass_centers"]
+        abcd_cfg = yield_info["abcd_cfg"]
+
+        valid = [e for e in scan_entries
+                 if e.get("ap_mass") is not None and e.get("eps2") is not None]
+        if not valid:
+            continue
+
+        eps2_sorted = sorted(set(e["eps2"] for e in valid))
+        if len(eps2_sorted) < 2:
+            logger.warning("data_yield_2d: not enough ε² points for region '%s' — skipping.",
+                           region_name)
+            continue
+
+        # Eq. 4 data factor: N_data × m / δm — window-independent to first order.
+        # N_data ≈ f(m) × δm for smooth spectrum, so N_data × m / δm ≈ f(m) × m
+        # which is independent of the signal window half-width hw.
+        hw_arr = np.array([_compute_window(abcd_cfg, region_name, mc)[0] for mc in mass_centers])
+        eq4_data = np.where(hw_arr > 0, n_data * mass_centers / (2.0 * hw_arr), 0.0)
+
+        masses_mev = mass_centers * 1000.0
+        log_e = np.log10(np.array(eps2_sorted))
+
+        # Same value for every eps2 row (data yield is eps2-independent)
+        eq4_grid = np.outer(np.ones(len(eps2_sorted)), eq4_data)
+
+        # pcolormesh bin edges
+        dm = np.diff(masses_mev)
+        m_edges = np.concatenate([[masses_mev[0] - dm[0] / 2],
+                                   masses_mev[:-1] + dm / 2,
+                                   [masses_mev[-1] + dm[-1] / 2]])
+        de = np.diff(log_e)
+        e_edges = np.concatenate([[log_e[0] - de[0] / 2],
+                                   log_e[:-1] + de / 2,
+                                   [log_e[-1] + de[-1] / 2]])
+
+        log_eq4 = np.where(eq4_grid > 0, np.log10(eq4_grid), np.nan)
+        vmin = np.nanmin(log_eq4) if not np.all(np.isnan(log_eq4)) else 0.0
+        vmax = np.nanmax(log_eq4) if not np.all(np.isnan(log_eq4)) else 1.0
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        pcm = ax.pcolormesh(m_edges, e_edges, log_eq4,
+                            cmap="plasma", vmin=vmin, vmax=vmax)
+
+        cb = fig.colorbar(pcm, ax=ax, pad=0.02)
+        cb.set_label(r"$\log_{10}(N_{\rm data} \cdot m\,/\,\delta m)$ [events]", fontsize=11)
+
+        ax.set_xlabel(r"$m_{A'}$ [MeV]", fontsize=12)
+        ax.set_ylabel(r"$\varepsilon^2$", fontsize=12)
+        ax.set_yticks(log_e)
+        ax.set_yticklabels(
+            [f"$10^{{{int(v)}}}$" if v == int(v) else f"$10^{{{v:.1f}}}$" for v in log_e]
+        )
+        ax.set_title(
+            f"Eq. 4 data factor $N_{{\\rm data}}\\cdot m/\\delta m$ — {region_name}\n"
+            r"(window-independent to first order; rows should be identical)",
+            fontsize=11,
+        )
+
+        outdir = Path(output_dir)
+        outdir.mkdir(parents=True, exist_ok=True)
+        fname = f"data_yield_2d_{region_name}.{output_format}"
+        fig.savefig(outdir / fname, bbox_inches="tight")
+        plt.close(fig)
+        logger.info("Saved 2D data yield plot: %s", outdir / fname)
+
+
+def plot_signal_window_scan(signal_scan_cache, region_name, output_dir, output_format,
+                            nominal_hw=None):
+    """Plot nsig vs mass-window half-width for all signal samples in one figure.
+
+    One curve per (sample, eps2) entry.  y-axis is nsig normalised to the value
+    at the nominal window so all curves start at 1.0 and deviations are visible
+    as a fraction.  A vertical dashed line marks the nominal hw when supplied.
+    """
+    scan_entries = signal_scan_cache.get(region_name, [])
+    # Keep only entries that have a populated window_scan list
+    plottable = [e for e in scan_entries if e.get("window_scan")]
+    if not plottable:
+        return
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    cmap = plt.get_cmap("tab10")
+    for idx, entry in enumerate(plottable):
+        ws = entry["window_scan"]
+        hw_vals  = np.array([p["hw_GeV"] * 1000 for p in ws])   # → MeV
+        nsig_vals = np.array([p["nsig"] for p in ws])
+
+        # Normalise to the value closest to the nominal hw
+        if nominal_hw is not None:
+            i_nom = int(np.argmin(np.abs(hw_vals - nominal_hw * 1000)))
+        else:
+            i_nom = len(hw_vals) // 2
+        ref = nsig_vals[i_nom]
+        if ref > 0:
+            nsig_norm = nsig_vals / ref
+        else:
+            nsig_norm = nsig_vals
+
+        m_GeV = entry.get("ap_mass")
+        m_label = f"{m_GeV * 1000:.0f} MeV" if m_GeV is not None else entry["label"]
+
+        ax.plot(hw_vals, nsig_norm, marker="o", ms=4, lw=1.5,
+                color=cmap(idx % 10), label=m_label)
+
+    if nominal_hw is not None:
+        ax.axvline(nominal_hw * 1000, color="gray", lw=1, ls="--",
+                   label=f"nominal hw = {nominal_hw * 1000:.1f} MeV")
+
+    ax.axhline(1.0, color="black", lw=0.8, ls=":")
+    ax.set_xlabel("Signal window half-width [MeV]")
+    ax.set_ylabel("nsig / nsig(nominal)")
+    ax.set_title(f"Window-size systematic — {region_name}")
+    ax.legend(fontsize=9, ncol=2)
+    ax.set_ylim(0, ax.get_ylim()[1] * 1.15)
+
+    outdir = Path(output_dir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fname = f"window_scan_{region_name}.{output_format}"
+    fig.savefig(outdir / fname, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("Saved: %s", outdir / fname)
 
 
 def _compute_sample_counts(sample_name, sample_cfg, mass_centers, abcd_cfg,
@@ -282,13 +805,64 @@ def _abcd_from_counts(nb, nc, nd):
     return est, err
 
 
-def _integrate_region(counts_dict, mass_centers, step, abcd_cfg, region_name):
+def _build_mass_centers(abcd_cfg, plot_cfg, samples_map):
+    """Return (mass_centers, step_arr) for the mass scan.
+
+    When abcd_cfg.mass_scan_from_signal_samples is True, mass_centers are the
+    sorted unique ap_mass values of signal samples within [mass_scan_min,
+    mass_scan_max].  step_arr gives the per-bin midpoint spacing, used by
+    _integrate_region.
+
+    When False (default), a regular arange grid is used with uniform step.
+    """
+    if abcd_cfg.mass_scan_from_signal_samples:
+        masses = sorted({
+            samples_map[n].ap_mass
+            for n in plot_cfg.samples
+            if samples_map[n].sample_type == "signal"
+            and samples_map[n].ap_mass is not None
+            and abcd_cfg.mass_scan_min <= samples_map[n].ap_mass <= abcd_cfg.mass_scan_max
+        })
+        if masses:
+            mc = np.array(masses)
+            if len(mc) == 1:
+                step_arr = np.array([abcd_cfg.mass_scan_step])
+            else:
+                diffs    = np.diff(mc)
+                step_arr = np.concatenate([
+                    [diffs[0]],
+                    (diffs[:-1] + diffs[1:]) / 2.0,
+                    [diffs[-1]],
+                ])
+            logger.info(
+                "mass_scan_from_signal_samples: %d points — %s MeV",
+                len(mc), [f"{m * 1000:.0f}" for m in mc],
+            )
+            return mc, step_arr
+        logger.warning(
+            "mass_scan_from_signal_samples=True but no signal samples have "
+            "ap_mass in [%.3f, %.3f] GeV — falling back to regular grid.",
+            abcd_cfg.mass_scan_min, abcd_cfg.mass_scan_max,
+        )
+
+    step = abcd_cfg.mass_scan_step
+    mc   = np.arange(
+        abcd_cfg.mass_scan_min,
+        abcd_cfg.mass_scan_max + step * 0.5,
+        step,
+    )
+    return mc, np.full(len(mc), step)
+
+
+def _integrate_region(counts_dict, mass_centers, step_arr, abcd_cfg, region_name):
     """Deweight sliding-window counts to produce a proper event integral.
 
     Each window of half-width hw_i centred on mass_centers[i] contains the
-    same event ~(2*hw_i / step) times across neighbouring windows.  The factor
-    w_i = step / (2*hw_i) converts per-window counts back to a per-GeV density
-    summed over step → total events in the scanned mass range.
+    same event ~(2*hw_i / step_i) times across neighbouring windows.  The factor
+    w_i = step_i / (2*hw_i) converts per-window counts back to a per-GeV density
+    summed over step_i → total events in the scanned mass range.
+
+    step_arr may be a scalar (uniform grid) or a 1-D array (signal-sample mode).
 
     Returns
     -------
@@ -297,7 +871,7 @@ def _integrate_region(counts_dict, mass_centers, step, abcd_cfg, region_name):
     hw_arr = np.array(
         [_compute_window(abcd_cfg, region_name, mc)[0] for mc in mass_centers]
     )
-    dw = step / (2.0 * hw_arr)
+    dw = np.asarray(step_arr) / (2.0 * hw_arr)
 
     na      = counts_dict["na"]
     na_err  = counts_dict["na_err"]
@@ -326,19 +900,13 @@ def plot_abcd_summary(plot_cfg, config, samples_map, output_dir, output_format,
     Bottom: ABCD / data  (red circles)  and  ABCD / MC truth  (navy squares)
     """
     abcd_cfg = plot_cfg.abcd
-    step     = abcd_cfg.mass_scan_step
-
-    mass_centers = np.arange(
-        abcd_cfg.mass_scan_min,
-        abcd_cfg.mass_scan_max + step * 0.5,
-        step,
-    )
+    mass_centers, step_arr = _build_mass_centers(abcd_cfg, plot_cfg, samples_map)
 
     outdir = Path(output_dir)
     outdir.mkdir(parents=True, exist_ok=True)
 
     data_names = [s for s in plot_cfg.samples if samples_map[s].sample_type == "data"]
-    mc_names   = [s for s in plot_cfg.samples if samples_map[s].sample_type != "data"]
+    mc_names   = [s for s in plot_cfg.samples if samples_map[s].sample_type not in ("data", "signal")]
 
     region_labels = []
     obs_vals,  obs_errs  = [], []
@@ -376,7 +944,7 @@ def plot_abcd_summary(plot_cfg, config, samples_map, output_dir, output_format,
                       "nb": np.zeros_like(mc_na), "nc": np.zeros_like(mc_na),
                       "nd": np.zeros_like(mc_na)}
         mc_tot, mc_tot_err, _, _ = _integrate_region(
-            mc_na_dict, mass_centers, step, abcd_cfg, region_name
+            mc_na_dict, mass_centers, step_arr, abcd_cfg, region_name
         )
         mc_vals.append(mc_tot)
         mc_errs.append(mc_tot_err)
@@ -386,7 +954,7 @@ def plot_abcd_summary(plot_cfg, config, samples_map, output_dir, output_format,
         bkg_tot = bkg_err2 = 0.0
         for name in data_names:
             na_t, na_e, bg_t, bg_e = _integrate_region(
-                counts[name], mass_centers, step, abcd_cfg, region_name
+                counts[name], mass_centers, step_arr, abcd_cfg, region_name
             )
             obs_tot  += na_t
             obs_err2 += na_e ** 2
@@ -480,7 +1048,8 @@ def plot_abcd_summary(plot_cfg, config, samples_map, output_dir, output_format,
 
 
 def plot_abcd(plot_cfg, region_cfg, config, samples_map, output_dir, output_format,
-             ann_scorer=None, data_cache=None, all_region_branches=None):
+             ann_scorer=None, data_cache=None, all_region_branches=None,
+             signal_scan_cache=None, data_yield_cache=None):
     """Run ABCD background estimation for one region.
 
     MC samples (sample_type != "data") are summed into a total background
@@ -501,11 +1070,7 @@ def plot_abcd(plot_cfg, region_cfg, config, samples_map, output_dir, output_form
     region      = Region(region_cfg)
     region_name = region_cfg.name
 
-    mass_centers = np.arange(
-        abcd_cfg.mass_scan_min,
-        abcd_cfg.mass_scan_max + abcd_cfg.mass_scan_step * 0.5,
-        abcd_cfg.mass_scan_step,
-    )
+    mass_centers, _step_arr = _build_mass_centers(abcd_cfg, plot_cfg, samples_map)
 
     # --- log region and ABCD zone definitions --------------------------------
     # Show the full selection string for the region and each ABCD zone so the
@@ -551,15 +1116,16 @@ def plot_abcd(plot_cfg, region_cfg, config, samples_map, output_dir, output_form
     outdir.mkdir(parents=True, exist_ok=True)
 
     # --- classify samples ---------------------------------------------------
-    data_names = [s for s in plot_cfg.samples if samples_map[s].sample_type == "data"]
-    mc_names   = [s for s in plot_cfg.samples if samples_map[s].sample_type != "data"]
+    data_names   = [s for s in plot_cfg.samples if samples_map[s].sample_type == "data"]
+    mc_names     = [s for s in plot_cfg.samples if samples_map[s].sample_type not in ("data", "signal")]
+    signal_names = [s for s in plot_cfg.samples if samples_map[s].sample_type == "signal"]
 
     # --- load counts per sample ---------------------------------------------
     # When data_cache is provided (shared across region calls) each sample is
     # loaded from disk only once; subsequent regions reuse the cached arrays
     # and just re-apply the region mask via _count_from_raw.
     counts = {}
-    for name in mc_names + data_names:
+    for name in mc_names + signal_names + data_names:
         cfg_s = samples_map[name]
         ea    = {**config.aliases, **cfg_s.aliases}
         if data_cache is not None:
@@ -694,6 +1260,125 @@ def plot_abcd(plot_cfg, region_cfg, config, samples_map, output_dir, output_form
     plt.close(fig)
     logger.info("Saved: %s", outdir / fname)
 
+    # ---- signal weight_scan: Eq. 4 scaled yields per eps² -----------------
+    if signal_scan_cache is not None:
+        # Resolve optional normalization region (loose reference for Eq. 4)
+        norm_region_obj = None
+        if abcd_cfg.signal_norm_region:
+            norm_region_cfg = next(
+                (r for r in config.regions if r.name == abcd_cfg.signal_norm_region), None
+            )
+            if norm_region_cfg is not None:
+                norm_region_obj = Region(norm_region_cfg)
+                logger.info(
+                    "Signal scan norm region: '%s' (overrides ABCD region '%s')",
+                    abcd_cfg.signal_norm_region, region_name,
+                )
+            else:
+                logger.warning(
+                    "signal_norm_region '%s' not found in config — "
+                    "falling back to ABCD region '%s'.",
+                    abcd_cfg.signal_norm_region, region_name,
+                )
+
+        # N_data in mass window, no z cut — from the chosen norm region
+        n_data_mass_only = np.zeros(len(mass_centers))
+        if norm_region_obj is not None and data_cache is not None:
+            for name in data_names:
+                if name in data_cache:
+                    c = _count_from_raw(
+                        data_cache[name], norm_region_obj,
+                        samples_map[name], mass_centers, abcd_cfg,
+                    )
+                    n_data_mass_only += c.get("n_mass_only", np.zeros(len(mass_centers)))
+        else:
+            for name in data_names:
+                n_data_mass_only += counts[name].get("n_mass_only", np.zeros(len(mass_centers)))
+
+        # If signal_norm_hw is set, recount n_data_mass_only with that window.
+        if abcd_cfg.signal_norm_hw is not None and data_cache is not None:
+            snhw = abcd_cfg.signal_norm_hw
+            eff_norm = norm_region_obj if norm_region_obj is not None else region
+            n_data_mass_only = np.zeros(len(mass_centers))
+            for name in data_names:
+                if name not in data_cache:
+                    continue
+                dr    = data_cache[name]
+                dmask = eff_norm.apply(dr["data"])
+                cfg_s = samples_map[name]
+                if cfg_s.selection:
+                    dmask = dmask & np.asarray(
+                        safe_evaluate(cfg_s.selection, dr["data"]), dtype=bool
+                    )
+                mass_a = np.asarray(
+                    safe_evaluate(abcd_cfg.mass_variable, dr["data"], mask=dmask), dtype=float
+                )
+                for i, mc in enumerate(mass_centers):
+                    n_data_mass_only[i] += float(
+                        np.sum((mass_a >= mc - snhw) & (mass_a <= mc + snhw))
+                    )
+            logger.info(
+                "Signal norm window: signal_norm_hw=%.4f GeV  (delta_m=%.4f GeV)",
+                snhw, 2.0 * snhw,
+            )
+
+        if data_yield_cache is not None:
+            data_yield_cache[region_name] = {
+                "n_data_mass_only": n_data_mass_only.copy(),
+                "mass_centers": mass_centers.copy(),
+                "abcd_cfg": abcd_cfg,
+            }
+
+        # Data mass array for window-size scan (extracted once, reused across signal samples)
+        data_mass_arr_for_scan = None
+        if abcd_cfg.window_scan and data_cache is not None and data_names:
+            eff_norm_ws = norm_region_obj if norm_region_obj is not None else region
+            arrs = []
+            for name in data_names:
+                if name in data_cache:
+                    dr = data_cache[name]
+                    dmask = eff_norm_ws.apply(dr["data"])
+                    cfg_s = samples_map[name]
+                    if cfg_s.selection:
+                        dmask = dmask & np.asarray(
+                            safe_evaluate(cfg_s.selection, dr["data"]), dtype=bool
+                        )
+                    arrs.append(np.asarray(
+                        safe_evaluate(abcd_cfg.mass_variable, dr["data"], mask=dmask),
+                        dtype=float,
+                    ))
+            if arrs:
+                data_mass_arr_for_scan = np.concatenate(arrs)
+
+        scan_results = []
+        for name in signal_names:
+            cfg_s = samples_map[name]
+            if not cfg_s.weight_scan and cfg_s.eps2_scan is None:
+                continue
+            raw = data_cache[name] if data_cache is not None else None
+            if raw is None:
+                logger.warning("Signal scan: no cached data for '%s' — skipping.", name)
+                continue
+            scan_results.extend(
+                _count_signal_scan_from_raw(
+                    raw, region, cfg_s, mass_centers, abcd_cfg,
+                    config.scaling_rad_frac, n_data_mass_only,
+                    norm_region=norm_region_obj,
+                    data_mass_arr_norm=data_mass_arr_for_scan,
+                )
+            )
+
+        signal_scan_cache[region_name] = scan_results
+
+        # SIMP diagnostic plot: nsig vs ε² overlaid with A', plus ratio panel
+        simp_entries = [r for r in scan_results if "simp" in r.get("label", "")]
+        ap_entries   = [r for r in scan_results if "simp" not in r.get("label", "")]
+        if simp_entries:
+            simp_scaling.plot_simp_diagnostics(
+                simp_entries, ap_entries or None,
+                region_name, outdir, output_format,
+            )
+
     return counts
 
 
@@ -714,12 +1399,7 @@ def plot_abcd_lumi_projections(plot_cfg, config, samples_map, output_dir, output
     if not abcd_cfg.lumi_projections:
         return
 
-    step = abcd_cfg.mass_scan_step
-    mass_centers = np.arange(
-        abcd_cfg.mass_scan_min,
-        abcd_cfg.mass_scan_max + step * 0.5,
-        step,
-    )
+    mass_centers, step_arr = _build_mass_centers(abcd_cfg, plot_cfg, samples_map)
 
     outdir = Path(output_dir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -886,7 +1566,8 @@ def plot_abcd_lumi_projections(plot_cfg, config, samples_map, output_dir, output
         logger.info("Saved: %s", outdir / fname)
 
 
-def write_abcd_json(plot_cfg, config, samples_map, counts_cache, output_path):
+def write_abcd_json(plot_cfg, config, samples_map, counts_cache, output_path,
+                    signal_scan_cache=None):
     """Write per-mass-bin ABCD results to a JSON file.
 
     Structure
@@ -911,11 +1592,7 @@ def write_abcd_json(plot_cfg, config, samples_map, counts_cache, output_path):
     """
     abcd_cfg = plot_cfg.abcd
 
-    mass_centers = np.arange(
-        abcd_cfg.mass_scan_min,
-        abcd_cfg.mass_scan_max + abcd_cfg.mass_scan_step * 0.5,
-        abcd_cfg.mass_scan_step,
-    )
+    mass_centers, _step_arr = _build_mass_centers(abcd_cfg, plot_cfg, samples_map)
 
     data_names = [s for s in plot_cfg.samples if samples_map[s].sample_type == "data"]
     L_ref = config.luminosity
@@ -995,6 +1672,21 @@ def write_abcd_json(plot_cfg, config, samples_map, counts_cache, output_path):
                     for label, scale in proj_scales.items()
                 }
 
+            if signal_scan_cache and region_name in signal_scan_cache:
+                entry["signal"] = {}
+                for sr in signal_scan_cache[region_name]:
+                    sig_entry = {
+                        "epsilon_sq":  sr["eps2"],
+                        "nsig":        round(float(sr["nsig"][i]), 6),
+                        "n_mc_a":      round(float(sr["n_mc_a"][i]), 6),
+                        "acceptance":  round(float(sr["n_mc_a"][i] / sr["n_mc_total"]), 8)
+                                       if sr["n_mc_total"] > 0 else 0.0,
+                        "norm_region": sr["norm_region"],
+                    }
+                    if sr.get("window_scan"):
+                        sig_entry["window_scan"] = sr["window_scan"]
+                    entry["signal"][sr["label"]] = sig_entry
+
             mass_points.append(entry)
 
         regions_data[region_name] = mass_points
@@ -1047,12 +1739,7 @@ def plot_abcd_aux_histogram(plot_cfg, aux_cfg, base_region_cfg, bin_region_names
         )
         return
 
-    step = abcd_cfg.mass_scan_step
-    mass_centers = np.arange(
-        abcd_cfg.mass_scan_min,
-        abcd_cfg.mass_scan_max + step * 0.5,
-        step,
-    )
+    mass_centers, _step_arr = _build_mass_centers(abcd_cfg, plot_cfg, samples_map)
 
     data_names   = [s for s in plot_cfg.samples if samples_map[s].sample_type == "data"]
     bkg_names    = [s for s in plot_cfg.samples if samples_map[s].sample_type == "background"]
@@ -1100,7 +1787,7 @@ def plot_abcd_aux_histogram(plot_cfg, aux_cfg, base_region_cfg, bin_region_names
             if name not in counts:
                 continue
             na_t, na_e, bg_t, bg_e = _integrate_region(
-                counts[name], mass_centers, step, abcd_cfg, rname
+                counts[name], mass_centers, step_arr, abcd_cfg, rname
             )
             obs_vals[i]  += na_t
             obs_errs[i]   = sqrt(obs_errs[i] ** 2 + na_e ** 2)

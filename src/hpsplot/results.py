@@ -9,19 +9,34 @@ from .config import Config, SampleConfig
 from .histogram import fill_histogram, fill_histogram_2d
 from .region import Region
 from .sample import Sample, compute_luminosity
-from .signal_scaling import compute_eq4_scale, count_data_in_window
+from .signal_scaling import compute_signal_scale_factor, count_data_in_window
 from .utils import safe_evaluate
 
 logger = logging.getLogger(__name__)
 
 
+_SCAN_COLOR_CYCLE = [
+    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+    "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+]
+
+
 def _process_single_sample(sample, lumi_weight, regions, hists, config):
-    """Process one sample (single directory) through all regions and histograms.
+    """Load data once and fill histograms for every weight expression.
+
+    When the sample has no ``weight_scan`` entries the single default weight
+    is used and the return dict has one key (the sample name), matching the
+    old behaviour.  When ``weight_scan`` is populated the ROOT data is loaded
+    **once** and histograms are filled separately for each scan entry without
+    re-reading from disk.
 
     Returns
     -------
     dict
-        sub_results[region_name][hist_name] → HistogramData
+        ``{virtual_name: {region_name: {hist_name: HistogramData}}}``
+
+        *virtual_name* is the sample name for the no-scan case, or the
+        ``WeightScanEntry.label`` for each scan entry.
     """
     hist_list = list(hists.values())
     region_list = list(regions.values())
@@ -30,9 +45,10 @@ def _process_single_sample(sample, lumi_weight, regions, hists, config):
 
     # Merge global aliases with per-sample overrides (sample wins on conflicts)
     effective_aliases = {**config.aliases, **sample.config.aliases}
+    # load() automatically adds branches for weight_scan weight expressions
     data = sample.load(branches, aliases=effective_aliases)
 
-    # Sample-level selection mask
+    # Sample-level selection mask (applied identically for all weight entries)
     sample_mask = None
     if sample.config.selection:
         sample_mask = np.asarray(
@@ -46,47 +62,81 @@ def _process_single_sample(sample, lumi_weight, regions, hists, config):
             100 * n_pass / n_total if n_total > 0 else 0,
         )
 
-    sub_results = {}
-    for region_name, region in regions.items():
-        mask = region.apply(data)
-        if sample_mask is not None:
-            mask = mask & sample_mask
+    total_scale = sample.scale * lumi_weight
+    # weight_scan_exprs falls back to [(sample.name, default_weight)] when no scan
+    weight_exprs = sample.weight_scan_exprs
 
-        sub_results[region_name] = {}
-        for hist_name, hist_cfg in hists.items():
-            values = safe_evaluate(hist_cfg.variable, data, mask=mask)
-            weights = safe_evaluate(sample.weight_expr, data, mask=mask)
+    all_results = {}
+    for virtual_name, weight_expr in weight_exprs:
+        sub_results = {}
+        for region_name, region in regions.items():
+            mask = region.apply(data)
+            if sample_mask is not None:
+                mask = mask & sample_mask
 
-            total_scale = sample.scale * lumi_weight
-            if total_scale != 1.0:
-                weights = np.asarray(weights, dtype=float) * total_scale
+            sub_results[region_name] = {}
+            for hist_name, hist_cfg in hists.items():
+                values = safe_evaluate(hist_cfg.variable, data, mask=mask)
+                weights = safe_evaluate(weight_expr, data, mask=mask)
 
-            if np.ndim(weights) == 0:
-                weights = np.full_like(values, float(weights), dtype=float)
+                if total_scale != 1.0:
+                    weights = np.asarray(weights, dtype=float) * total_scale
 
-            if hist_cfg.y_variable:
-                y_values = safe_evaluate(hist_cfg.y_variable, data, mask=mask)
-                hdata = fill_histogram_2d(
-                    values, y_values, weights,
-                    hist_cfg.bins, hist_cfg.x_min, hist_cfg.x_max,
-                    hist_cfg.y_bins, hist_cfg.y_min, hist_cfg.y_max,
-                )
-                logger.info(
-                    "  %s / %s / %s: total weight = %.1f",
-                    sample.name, region_name, hist_name, np.sum(hdata.contents),
-                )
-            else:
-                hdata = fill_histogram(
-                    values, weights,
-                    hist_cfg.bins, hist_cfg.x_min, hist_cfg.x_max,
-                )
-                logger.info(
-                    "  %s / %s / %s: integral = %.1f",
-                    sample.name, region_name, hist_name, hdata.integral,
-                )
-            sub_results[region_name][hist_name] = hdata
+                if np.ndim(weights) == 0:
+                    weights = np.full_like(values, float(weights), dtype=float)
 
-    return sub_results
+                if hist_cfg.y_variable:
+                    y_values = safe_evaluate(hist_cfg.y_variable, data, mask=mask)
+                    hdata = fill_histogram_2d(
+                        values, y_values, weights,
+                        hist_cfg.bins, hist_cfg.x_min, hist_cfg.x_max,
+                        hist_cfg.y_bins, hist_cfg.y_min, hist_cfg.y_max,
+                    )
+                    logger.info(
+                        "  %s / %s / %s: total weight = %.1f",
+                        virtual_name, region_name, hist_name, np.sum(hdata.contents),
+                    )
+                else:
+                    hdata = fill_histogram(
+                        values, weights,
+                        hist_cfg.bins, hist_cfg.x_min, hist_cfg.x_max,
+                    )
+                    logger.info(
+                        "  %s / %s / %s: integral = %.1f",
+                        virtual_name, region_name, hist_name, hdata.integral,
+                    )
+                sub_results[region_name][hist_name] = hdata
+
+        all_results[virtual_name] = sub_results
+
+    return all_results
+
+
+def _register_virtual_configs(sample, config):
+    """Add virtual SampleConfig entries for weight_scan labels to config.samples.
+
+    These lightweight entries carry color/label metadata so the plotting
+    functions can render scan entries exactly like real samples.  The real
+    sample (parent) is NOT removed — it remains in the list for non-scan use.
+    Already-registered entries are skipped so calling this multiple times is safe.
+    """
+    if not sample.config.weight_scan:
+        return
+    existing_names = {s.name for s in config.samples}
+    for i, entry in enumerate(sample.config.weight_scan):
+        if entry.label in existing_names:
+            continue
+        color = entry.color or _SCAN_COLOR_CYCLE[i % len(_SCAN_COLOR_CYCLE)]
+        virtual = SampleConfig(
+            name=entry.label,
+            label=entry.label,
+            color=color,
+            sample_type=sample.config.sample_type,
+            weight=entry.weight,
+            # No directory — this config is metadata-only; loading is via parent
+        )
+        config.samples.append(virtual)
+        existing_names.add(entry.label)
 
 
 def process(config: Config):
@@ -159,7 +209,7 @@ def process(config: Config):
                             data_cfg, scaling_region_cfg,
                             mass_var, mass_hw, s.ap_mass, config.aliases,
                         )
-                    scale = compute_eq4_scale(
+                    scale = compute_signal_scale_factor(
                         s, data_counts_cache[s.ap_mass],
                         scaling_region_cfg, config.aliases,
                         mass_hw, config.scaling_rad_frac,
@@ -189,13 +239,25 @@ def process(config: Config):
         needed_regions = set(region_map.keys())
         needed_hists = set(hist_map.keys())
 
+    # Build a reverse map: scan entry label → parent SampleConfig.
+    # This lets the plot reference scan labels directly in its samples list
+    # while still loading the parent ROOT files only once.
+    scan_label_to_parent = {}
+    for s in config.samples:
+        for entry in s.weight_scan:
+            scan_label_to_parent[entry.label] = s
+
     # Build objects
     samples = {}
     for name in needed_samples:
-        if name not in sample_map:
+        if name in sample_map:
+            samples[name] = Sample(sample_map[name])
+        elif name in scan_label_to_parent:
+            parent_cfg = scan_label_to_parent[name]
+            if parent_cfg.name not in samples:
+                samples[parent_cfg.name] = Sample(parent_cfg)
+        else:
             logger.debug("Sample '%s' referenced in plot but not in current sample set — skipping.", name)
-            continue
-        samples[name] = Sample(sample_map[name])
 
     regions = {}
     for name in needed_regions:
@@ -247,28 +309,30 @@ def process(config: Config):
                     lumi_weight, sub_sample.scale, total_scale,
                 )
 
-                sub_results = _process_single_sample(
+                vn_results = _process_single_sample(
                     sub_sample, lumi_weight, regions, hists, config,
                 )
 
-                # Merge into accumulated results
+                # Merge into accumulated results (keyed by virtual_name)
                 if merged is None:
-                    merged = sub_results
+                    merged = vn_results
                 else:
-                    for rn in sub_results:
-                        for hn in sub_results[rn]:
-                            merged[rn][hn] = merged[rn][hn] + sub_results[rn][hn]
+                    for vn in vn_results:
+                        for rn in vn_results[vn]:
+                            for hn in vn_results[vn][rn]:
+                                merged[vn][rn][hn] = merged[vn][rn][hn] + vn_results[vn][rn][hn]
 
-            # Store merged results under the sample name
-            for region_name in merged:
-                if region_name not in results:
-                    results[region_name] = {}
-                results[region_name][sample_name] = merged[region_name]
-                for hist_name, hdata in merged[region_name].items():
-                    logger.info(
-                        "  %s / %s / %s: merged integral = %.1f",
-                        sample_name, region_name, hist_name, hdata.integral,
-                    )
+            # Store merged results
+            for virtual_name, vn_sub in merged.items():
+                for region_name, hist_results in vn_sub.items():
+                    results.setdefault(region_name, {})[virtual_name] = hist_results
+                    for hist_name, hdata in hist_results.items():
+                        logger.info(
+                            "  %s / %s / %s: merged integral = %.1f",
+                            virtual_name, region_name, hist_name, hdata.integral,
+                        )
+            # Register any virtual SampleConfigs produced by weight_scan
+            _register_virtual_configs(sample, config)
 
         else:
             # Single directory (or no lumi scaling) — process normally
@@ -288,13 +352,14 @@ def process(config: Config):
                     lumi_weight, sample.scale, total_scale,
                 )
 
-            sub_results = _process_single_sample(
+            vn_results = _process_single_sample(
                 sample, lumi_weight, regions, hists, config,
             )
 
-            for region_name in sub_results:
-                if region_name not in results:
-                    results[region_name] = {}
-                results[region_name][sample_name] = sub_results[region_name]
+            for virtual_name, vn_sub in vn_results.items():
+                for region_name, hist_results in vn_sub.items():
+                    results.setdefault(region_name, {})[virtual_name] = hist_results
+            # Register any virtual SampleConfigs produced by weight_scan
+            _register_virtual_configs(sample, config)
 
     return results
