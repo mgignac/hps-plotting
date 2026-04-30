@@ -168,3 +168,5 @@ plots:
       # Window size scan: list of half-widths [GeV] to evaluate.
       # nsig/nsig(nominal=5 MeV) vs hw will be plotted per mass point.
       window_scan: [0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.008, 0.010, 0.012, 0.015, 0.018, 0.020]
+      window_scan_y_min: 0.98
+      window_scan_y_max: 1.02

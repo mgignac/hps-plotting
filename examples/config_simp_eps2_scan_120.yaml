@@ -2,7 +2,14 @@ tree: "preselection"
 output_dir: "plots/simp_eps2_scan_120/"
 output_format: "pdf"
 lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
-scaling_rad_frac: 0.05097
+# Radiative fraction f_rad(m) — polynomial from students/simp_base.py ratio()
+# Valid range: 50–250 MeV (m in GeV)
+scaling_rad_frac: "-0.16647 + 8.0747*m - 111.31*m**2 + 727.92*m**3 - 2241.3*m**4 + 2604.3*m**5"
+
+# Radiative acceptance A_rad(m) — polynomial from students/simp_base.py ratio()
+# Divides sarah_prompt_yield for SIMP samples to recover bare A' production rate.
+# Valid range: 50–250 MeV (m in GeV)
+scaling_rad_acceptance: "0.091562 - 10.339*m + 256.94*m**2 - 1940.0*m**3 + 5812.8*m**4 - 5999.9*m**5"
 
 # SIMP signal scan at m_A' = 120 MeV.
 #
@@ -15,7 +22,7 @@ scaling_rad_frac: 0.05097
 #
 # where lt_V = exp(-Δz / (βγ·cτ_V)) / (βγ·cτ_V).
 # cτ_V is computed from the dark sector model in simp_scaling.py.
-# Eq. 4 normalization (f_rad × N_data × (3πε²/2α) × m/δm) is unchanged.
+# Eq. 4 base: (f_rad/A_rad) × N_data × (3πε²/2α) × m/δm  — A_rad divides out here.
 
 samples:
   - name: data

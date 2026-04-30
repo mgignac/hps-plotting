@@ -3,7 +3,7 @@ output_dir: "plots/abcd_ap_simple/"
 output_format: "pdf"
 lumi_file: /sdf/data/hps/physics2021/preselection/v2/data/lumi_batch1.txt
 
-scaling_rad_frac: 0.05097
+scaling_rad_frac: "-1.28948684e-01 + 7.49564672e+00*m - 1.18467019e+02*m**2 + 8.86483892e+02*m**3 - 3.13954474e+03*m**4 + 4.22677239e+03*m**5"
 
 aliases:
   vertex_mass: "vertex./vertex.invM_"
@@ -156,8 +156,8 @@ plots:
       z_control_max: 0.2
       x_label: "$m_{e^+e^-}$ [GeV]"
       log_y: true
+      signal_norm_hw: 0.0005
       json_output: "plots/abcd_ap_simple/results_120.json"
-#     signal_norm_region: "inclusive"
 
   # --- Differential ABCD at 90 MeV, inclusive + L1L1 -----------------------
   - name: abcd_90
@@ -179,8 +179,8 @@ plots:
       z_control_max: 0.2
       x_label: "$m_{e^+e^-}$ [GeV]"
       log_y: true
+      signal_norm_hw: 0.0005
       json_output: "plots/abcd_ap_simple/results_90.json"
-#     signal_norm_region: "inclusive"
 
   # --- Differential ABCD at 180 MeV, inclusive + L1L1 ----------------------
   - name: abcd_180
@@ -202,5 +202,5 @@ plots:
       z_control_max: 0.2
       x_label: "$m_{e^+e^-}$ [GeV]"
       log_y: true
+      signal_norm_hw: 0.0005
       json_output: "plots/abcd_ap_simple/results_180.json"
-#     signal_norm_region: "inclusive"

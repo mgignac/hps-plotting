@@ -146,7 +146,7 @@ regions:
 plots:
   - name: abcd_window_scan_fine
     plot_type: abcd
-    samples: [data, ap_60, ap_80] # ap_100, ap_110, ap_120, ap_140, ap_160, ap_180]
+    samples: [data, ap_60, ap_80, ap_100, ap_110, ap_120, ap_140, ap_160, ap_180]
     regions: [inclusive]
     abcd:
       mass_variable: "vertex_mass"
@@ -165,6 +165,9 @@ plots:
       x_label: "$m_{e^+e^-}$ [GeV]"
       log_y: true
       json_output: "plots/abcd_window_scan_fine/results_window_scan_fine.json"
-      # Fine window scan: every 0.1 MeV from 0.1–1 MeV, every 0.5 MeV from 1–5 MeV
+      # Fine window scan: every 0.1 MeV from 0.1–1 MeV, every 0.5 MeV from 1–5 MeV, coarser to 30 MeV
       window_scan: [0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007, 0.0008, 0.0009,
-                    0.001, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004, 0.0045, 0.005]
+                    0.001, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004, 0.0045, 0.005,
+                    0.006, 0.007, 0.008, 0.009, 0.010, 0.012, 0.015, 0.018, 0.020, 0.025, 0.030]
+      window_scan_y_min: 0.75
+      window_scan_y_max: 1.25

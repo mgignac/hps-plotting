@@ -280,6 +280,11 @@ class ABCDConfig:
     # is produced showing nsig vs hw for every signal sample on one figure.
     # Leave empty (default) to disable the scan entirely.
     window_scan: List[float] = field(default_factory=list)
+    # Optional y-axis limits for the window-scan systematic plot (nsig/nsig_nominal).
+    # When None (default), the y-axis autoscales from 0 to max*1.15.
+    # Set e.g. window_scan_y_min: 0.9, window_scan_y_max: 1.1 to zoom in.
+    window_scan_y_min: Optional[float] = None
+    window_scan_y_max: Optional[float] = None
     # --- 2D signal yield plot (nsig vs mass and ε²) ---
     # When non-empty, produce a 2D heat map of nsig(mass, ε²) after the scan.
     # The value is used as a flag; output filename is auto-generated from region
@@ -347,6 +352,7 @@ class Config:
     scaling_mass_variable: str = ""      # expression for invariant mass used in Eq. 4 scaling
     scaling_mass_window: float = 0.005   # half-width [GeV] of mass window for counting data events
     scaling_rad_frac: Union[float, str] = 0.05  # f_rad: float or mass-dependent expression in m [GeV] (Eq. 4)
+    scaling_rad_acceptance: Optional[Union[float, str]] = None  # A_rad: radiative acceptance; when set, SIMP yields divide by this
     ann: Optional["ANNConfig"] = None    # ANN scorer config; if set, ann_score available in selections
     run_label: str = ""                  # set automatically by --per-file; used to key JSON outputs
     hit_cat_file: str = ""               # path to hit-category fraction table (run L1L1 L1L2 L2L1 L2L2 Other)
@@ -372,6 +378,7 @@ def load_config(path: str) -> Config:
         scaling_mass_variable=raw.get("scaling_mass_variable", ""),
         scaling_mass_window=raw.get("scaling_mass_window", 0.005),
         scaling_rad_frac=raw.get("scaling_rad_frac", 0.05),
+        scaling_rad_acceptance=raw.get("scaling_rad_acceptance", None),
         ann=ANNConfig(**ann_raw) if ann_raw is not None else None,
         hit_cat_file=raw.get("hit_cat_file", ""),
         hit_cat_ref_run=raw.get("hit_cat_ref_run", 0),

@@ -559,6 +559,8 @@ def _generate_plots(config, results, logger):
                     plot_signal_window_scan(
                         signal_scan_cache, region_name, outdir, config.output_format,
                         nominal_hw=nom_hw,
+                        y_min=abcd_cfg.window_scan_y_min,
+                        y_max=abcd_cfg.window_scan_y_max,
                     )
 
             # 2D signal yield plot: nsig(mass, ε²) heat map.

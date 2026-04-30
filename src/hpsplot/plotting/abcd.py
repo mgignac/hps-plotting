@@ -277,7 +277,7 @@ def _eval_rad_frac(rad_frac, mass_center):
 
 def _count_signal_scan_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg,
                                  rad_frac, n_data_mass_only, norm_region=None,
-                                 data_mass_arr_norm=None):
+                                 data_mass_arr_norm=None, rad_acceptance=None):
     """Compute per-eps² signal yields in region A with Eq. 4 scaling.
 
     Handles both ``weight_scan`` entries (explicit weight expressions) and
@@ -332,7 +332,7 @@ def _count_signal_scan_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg,
                if np.ndim(raw_w_n) == 0 else np.asarray(raw_w_n, dtype=float))
         wn = np.where(np.isfinite(w_n * total_scale) & (w_n * total_scale >= 0.0),
                       w_n * total_scale, 0.0)
-        scan_items.append((entry.epsilon_sq, entry.label, wa, wn, True))
+        scan_items.append((entry.epsilon_sq, entry.label, wa, wn, True, False))
 
     if has_e2:
         es = sample_cfg.eps2_scan
@@ -385,7 +385,7 @@ def _count_signal_scan_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg,
                         eps2, ctau_rho, ctau_phi, len(wa), float(np.sum(wa)),
                     )
                     label = f"{sample_cfg.name}_simp_eps2_{eps2:.3e}"
-                    scan_items.append((eps2, label, wa, wn, False))
+                    scan_items.append((eps2, label, wa, wn, False, True))
         else:
             # ---- standard A' eps2_scan (unchanged) --------------------------
             ap_mass_mev = ap_mass * 1000.0
@@ -415,7 +415,7 @@ def _count_signal_scan_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg,
                               bw_n * lt_n * es.gen_length_mm, 0.0)
 
                 label = f"{sample_cfg.name}_eps2_{eps2:.3e}"
-                scan_items.append((eps2, label, wa, wn, False))
+                scan_items.append((eps2, label, wa, wn, False, False))
 
     # --- unified counting loop over all scan items --------------------------
     norm_name = eff_norm.config.name
@@ -445,7 +445,7 @@ def _count_signal_scan_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg,
 
     results   = []
 
-    for eps2_val, label, weights_abcd, weights_norm, verbose in scan_items:
+    for eps2_val, label, weights_abcd, weights_norm, verbose, is_simp in scan_items:
         n_mc_total     = float(np.sum(weights_norm))
         n_mc_a         = np.zeros(n)
         n_mc_mass_only = np.zeros(n)
@@ -466,6 +466,10 @@ def _count_signal_scan_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg,
                 mass_hyp     = ap_mass if ap_mass is not None else mc
                 rad_frac_val = _eval_rad_frac(rad_frac, mc)
                 n_expected   = sarah_prompt_yield(mass_hyp, eps2_val, n_data_mass_only[i], delta_m, rad_frac_val)
+                if is_simp and rad_acceptance is not None:
+                    rad_acc_val = _eval_rad_frac(rad_acceptance, mc)
+                    if rad_acc_val > 0:
+                        n_expected = n_expected / rad_acc_val
                 scale        = n_expected / n_mc_mass_only[i]
                 nsig[i]      = n_mc_a[i] * scale
                 if verbose:
@@ -531,8 +535,28 @@ def _count_signal_scan_from_raw(raw, region, sample_cfg, mass_centers, abcd_cfg,
                     if n_mc_win_ws > 0 and n_data_ws > 0:
                         rad_frac_val   = _eval_rad_frac(rad_frac, mc)
                         n_exp_ws       = sarah_prompt_yield(mass_hyp, eps2_val, n_data_ws, delta_m_ws, rad_frac_val)
+                        if is_simp and rad_acceptance is not None:
+                            rad_acc_val = _eval_rad_frac(rad_acceptance, mc)
+                            if rad_acc_val > 0:
+                                n_exp_ws = n_exp_ws / rad_acc_val
                         nsig_ws_arr[i] = n_mc_a_ws * (n_exp_ws / n_mc_win_ws)
-                ws_sum = float(np.sum(nsig_ws_arr))
+                        logger.debug(
+                            "      window_scan hw=%.3f MeV m=%.0f MeV: "
+                            "N_data=%g  delta_m=%.3f MeV  N_data/delta_m=%.4g MeV^-1  "
+                            "n_mc_a=%.4g  n_mc_win=%.4g  acc=%.4f  n_exp=%.4g  nsig=%.4g",
+                            hw_ws * 1000, mc * 1000,
+                            n_data_ws, delta_m_ws * 1000, n_data_ws / (delta_m_ws * 1000),
+                            n_mc_a_ws, n_mc_win_ws, n_mc_a_ws / n_mc_win_ws,
+                            n_exp_ws, nsig_ws_arr[i],
+                        )
+                # Use only the on-peak bin (mass center closest to ap_mass) so
+                # each signal sample tests its own local spectral slope rather
+                # than the mass-hypothesis-independent sum over all bins.
+                if ap_mass is not None and len(mass_centers) > 0:
+                    i_peak = int(np.argmin(np.abs(np.asarray(mass_centers) - ap_mass)))
+                    ws_sum = float(nsig_ws_arr[i_peak])
+                else:
+                    ws_sum = float(np.sum(nsig_ws_arr))
                 ws_results.append({"hw_GeV": hw_ws, "nsig": ws_sum})
                 logger.info("    window_scan  hw=%.2f MeV → nsig=%.4g", hw_ws * 1000, ws_sum)
 
@@ -722,7 +746,7 @@ def plot_data_yield_2d(signal_scan_cache, data_yield_cache, output_dir, output_f
 
 
 def plot_signal_window_scan(signal_scan_cache, region_name, output_dir, output_format,
-                            nominal_hw=None):
+                            nominal_hw=None, y_min=None, y_max=None):
     """Plot nsig vs mass-window half-width for all signal samples in one figure.
 
     One curve per (sample, eps2) entry.  y-axis is nsig normalised to the value
@@ -769,7 +793,12 @@ def plot_signal_window_scan(signal_scan_cache, region_name, output_dir, output_f
     ax.set_ylabel("nsig / nsig(nominal)")
     ax.set_title(f"Window-size systematic — {region_name}")
     ax.legend(fontsize=9, ncol=2)
-    ax.set_ylim(0, ax.get_ylim()[1] * 1.15)
+    if y_min is not None or y_max is not None:
+        lo = y_min if y_min is not None else 0.0
+        hi = y_max if y_max is not None else ax.get_ylim()[1] * 1.15
+        ax.set_ylim(lo, hi)
+    else:
+        ax.set_ylim(0, ax.get_ylim()[1] * 1.15)
 
     outdir = Path(output_dir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -1365,6 +1394,7 @@ def plot_abcd(plot_cfg, region_cfg, config, samples_map, output_dir, output_form
                     config.scaling_rad_frac, n_data_mass_only,
                     norm_region=norm_region_obj,
                     data_mass_arr_norm=data_mass_arr_for_scan,
+                    rad_acceptance=config.scaling_rad_acceptance,
                 )
             )
 
@@ -1675,6 +1705,18 @@ def write_abcd_json(plot_cfg, config, samples_map, counts_cache, output_path,
             if signal_scan_cache and region_name in signal_scan_cache:
                 entry["signal"] = {}
                 for sr in signal_scan_cache[region_name]:
+                    # Only write the signal entry at the mass bin closest to
+                    # ap_mass.  Off-peak bins are spurious: for acc≈1 the
+                    # formula collapses to sarah_prompt_yield(ap_mass, …,
+                    # N_data_at_bin, …) with no dependence on how many MC
+                    # events actually fall in the bin.
+                    sr_ap_mass = sr.get("ap_mass")
+                    if sr_ap_mass is not None:
+                        mc_arr = np.asarray(sr.get("mass_centers", []), dtype=float)
+                        if len(mc_arr) > 0:
+                            i_peak = int(np.argmin(np.abs(mc_arr - sr_ap_mass)))
+                            if i != i_peak:
+                                continue
                     sig_entry = {
                         "epsilon_sq":  sr["eps2"],
                         "nsig":        round(float(sr["nsig"][i]), 6),
